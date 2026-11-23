@@ -118,12 +118,19 @@ Principles:
 ## 9. Boundary Versions
 
 - Geometry type: GEOMETRY(MultiPolygon,4326)
-- Canonical geometry must be valid and non-empty
+- Canonical geometry must be valid (`ST_IsValid`), non-empty (`NOT ST_IsEmpty`), and `SRID = 4326`
 - Geometry and source/version provenance are immutable
+- Approved lifecycle states: `DRAFT` -> `VALIDATED` -> `APPROVED` (no unapproved alternative statuses)
+- Structural geometry validity is necessary for storage but does not substitute for independent boundary validation:
+  - `DRAFT`: structurally valid geometry stored before independent verification; validation and approval metadata must be `NULL`.
+  - `VALIDATED`: independent boundary verification recorded with non-blank `validated_by`, `validated_at`, and structured JSONB object `validation_evidence`; approval metadata must remain `NULL`.
+  - `APPROVED`: requires complete validation provenance (`validated_by`, `validated_at`, `validation_evidence`) plus non-blank `approved_by` and `approved_at >= validated_at`.
 - Approval is required before publication
 - Invalid geometry is rejected or reviewed; not silently repaired
 
 Boundary version selection must be tied to the import run.
+
+> Enforcement boundary note: Row-level `CHECK` constraints enforce geometry validity and per-state metadata completeness, but do not by themselves enforce historical state-transition ordering (such as preventing direct insertion into `APPROVED` or backward status transitions), immutable `UPDATE` protection on geometry/provenance, or cross-table enforcement that a `PUBLISHED` import run references an `APPROVED` boundary. Those transition guards and immutability checks are implemented in M2/M3 (service-layer guards and/or database triggers).
 
 ## 10. Import Runs
 

@@ -1,0 +1,67 @@
+"""Database connectivity, PostGIS types, and canonical SQLAlchemy models."""
+
+from geosearch.db.base import Base
+from geosearch.db.engine import (
+    UnsafeDatabaseConfigError,
+    build_disposable_test_database_name,
+    create_db_engine,
+    create_test_engine,
+    get_database_url,
+    get_test_database_url,
+    is_recognized_test_database_name,
+    validate_database_url,
+    validate_test_database_prefix,
+    validate_test_database_url,
+    verify_connected_test_database,
+)
+from geosearch.db.models import (
+    BOUNDARY_APPROVAL_STATUSES,
+    IMPORT_ISSUE_SEVERITIES,
+    IMPORT_RUN_STATUSES,
+    IMPORT_RUN_TYPES,
+    OSM_TYPES,
+    PLACE_CATEGORIES,
+    BoundaryVersion,
+    DuplicateCandidate,
+    ImportIssue,
+    ImportRun,
+    Place,
+)
+from geosearch.db.types import (
+    InvalidCoordinateError,
+    PostGISGeography,
+    PostGISGeometry,
+    make_wgs84_point_expr,
+    validate_wgs84_coordinates,
+)
+
+__all__ = [
+    "BOUNDARY_APPROVAL_STATUSES",
+    "Base",
+    "BoundaryVersion",
+    "DuplicateCandidate",
+    "IMPORT_ISSUE_SEVERITIES",
+    "IMPORT_RUN_STATUSES",
+    "IMPORT_RUN_TYPES",
+    "ImportIssue",
+    "ImportRun",
+    "InvalidCoordinateError",
+    "OSM_TYPES",
+    "PLACE_CATEGORIES",
+    "Place",
+    "PostGISGeography",
+    "PostGISGeometry",
+    "UnsafeDatabaseConfigError",
+    "build_disposable_test_database_name",
+    "create_db_engine",
+    "create_test_engine",
+    "get_database_url",
+    "get_test_database_url",
+    "is_recognized_test_database_name",
+    "make_wgs84_point_expr",
+    "validate_database_url",
+    "validate_test_database_prefix",
+    "validate_test_database_url",
+    "validate_wgs84_coordinates",
+    "verify_connected_test_database",
+]

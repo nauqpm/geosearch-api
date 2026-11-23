@@ -1,6 +1,6 @@
 # GeoSearch API — Implementation Plan
 
-Status: PLANNED
+Status: IN PROGRESS (M1.1–M1.5 implemented and verified; awaiting review before M2)
 
 ## Working Principles
 
@@ -44,10 +44,11 @@ Acceptance:
 - No destructive operations on non-test databases
 
 Implement M1 in small tasks:
-- M1.1: PostgreSQL/PostGIS and Python tooling
-- M1.2: SQLAlchemy models and schema contracts
-- M1.3: Alembic migrations
-- M1.4: Constraint and migration tests
+- M1.1: PostgreSQL/PostGIS and Python tooling (completed)
+- M1.2: SQLAlchemy models and schema contracts (completed)
+- M1.3: Alembic migrations (completed)
+- M1.4: Constraint and migration tests (completed)
+- M1.5: Architecture compliance remediation — boundary `DRAFT -> VALIDATED -> APPROVED` lifecycle, database safety hardening, Alembic/PostGIS reflection and autogenerate fixes, core-only packaging fix, and documentation alignment (completed; pending review before M2)
 
 ## M2 — Data Validation & OSM Ingestion
 
@@ -144,6 +145,6 @@ Each completed task must report:
 
 ## Current Task
 
-M0 — Repository Bootstrap.
+M1.5 — Architecture Compliance Remediation (complete; awaiting sign-off review before starting M2).
 
-Do not implement M1 or later milestones without a separate task.
+Do not implement M2 or later milestones until M1 is reviewed and M2 is explicitly assigned.

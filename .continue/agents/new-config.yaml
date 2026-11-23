@@ -1,0 +1,26 @@
+name: Home Server Coding AI
+version: 1.0.0
+schema: v1
+
+models:
+  - name: Qwen2.5-Coder 3B
+    provider: ollama
+    model: qwen2.5-coder:3b
+    apiBase: https://homeserver.tail6ddf42.ts.net
+
+    roles:
+      - chat
+      - edit
+      - apply
+      - autocomplete
+    capabilities:
+      - tool_use
+
+    
+    defaultCompletionOptions:
+      contextLength: 8192
+      maxTokens: 1024
+      temperature: 0.1
+
+
+
