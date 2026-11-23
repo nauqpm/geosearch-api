@@ -1,6 +1,6 @@
 # GeoSearch API — Implementation Plan
 
-Status: IN PROGRESS (M1.1–M1.5 and M2.1–M2.6 implemented and verified on synthetic fixtures; ready for M2 sign-off review before M3)
+Status: IN PROGRESS (M1.1–M1.5, M2.1–M2.6, and M3.1–M3.7 implemented and verified on synthetic fixtures; ready for M3 sign-off review before M4)
 
 ## Working Principles
 
@@ -73,19 +73,20 @@ Ways and Relations are later incremental tasks.
 ## M3 — Transactional Publication
 
 Deliverables:
-- Prepared-run readiness checks
-- Publication UUID registration
-- Advisory locking and guarded state transitions
-- Conflict-aware UPSERT
-- Full staging membership reconciliation
-- Active slot switching
-- Pre-commit verification
+- Prepared-run readiness & fail-closed eligibility (`src/geosearch/publication/eligibility.py`, `models.py`) — completed (M3.1)
+- Durable publication UUID registration & evidence inspection (`src/geosearch/publication/operations.py`) — completed (M3.1/M3.4)
+- Immutable pre-publication recovery artifacts (`src/geosearch/publication/recovery_artifact.py`) — completed (M3.2; restore execution deferred to M5)
+- PostgreSQL trigger guards (`alembic/versions/20261123_0003_m3_publication_guards.py`, `20261123_0004_m3_staging_immutability_guards.py`) — completed (M3.1/M3.4/M3.7)
+- Advisory locking, guarded atomic publication, conflict-aware UPSERT, scope-aware membership reconciliation, canonical duplicate candidate resolution, active-slot switching, and bidirectional SQL `EXCEPT` + staging digest pre-commit verification (`src/geosearch/publication/engine.py`, `reconciliation.py`, `duplicates.py`, `verification.py`) — completed (M3.3–M3.4/M3.7)
+- Read consistency helpers, 13-checkpoint fault-injection, deterministic concurrency, reader snapshot isolation, and M3.7 remediation integration tests (`src/geosearch/publication/readers.py`, `tests/test_m3_*.py`, `tests/test_m37_remediation.py`) — completed (M3.5–M3.7)
 
 Acceptance:
-- V1 to V2 publication succeeds atomically
-- Failure before COMMIT leaves previous publication unchanged
-- Retry does not duplicate committed publication
-- Concurrency does not cause stale overwrite
+- V1 to V2 publication succeeds atomically on synthetic fixtures (verified)
+- Failure before COMMIT leaves previous publication unchanged across all 12 pre-COMMIT checkpoints (verified)
+- Retry does not duplicate committed publication and resolves lost COMMIT acknowledgements via durable evidence (verified)
+- Concurrency does not cause stale overwrites or duplicate active slots (verified)
+- Incomplete `node_only` runs and synthetic boundaries remain blocked from `AUTHORITATIVE` publication (verified)
+- Authoritative real-world HCMC boundary publication, Way/Relation full coverage, and M5 controlled restore execution remain deferred
 
 ## M4 — Search API
 
@@ -147,6 +148,6 @@ Each completed task must report:
 
 ## Current Task
 
-M2.6 — Data Integrity & Compliance Remediation (M2.1–M2.6 complete and verified on synthetic fixtures; awaiting sign-off review before starting M3).
+M3.7 — Transactional Integrity & Compliance Remediation (M3.1–M3.7 complete and verified on synthetic fixtures; awaiting sign-off review before starting M4).
 
-Do not implement M3 or later milestones until M2 is reviewed and M3 is explicitly assigned.
+Do not implement M4 or later milestones until M3 is reviewed and M4 is explicitly assigned.

@@ -2,7 +2,7 @@
 
 A location-based place discovery service powered by Python, FastAPI, PostgreSQL/PostGIS, and OpenStreetMap data.
 
-> Status: M1 — Database Foundation and M2 — Data Validation & OSM Ingestion (Node-only streaming extraction, deterministic validation/normalization, technical staging, import issues, and readiness verification) implemented and verified against PostgreSQL 16 / PostGIS 3.4 using synthetic fixtures. Independently verified post-2025 Ho Chi Minh City boundary fixtures, Way/Relation geometry extraction, and later milestones (M3 publication, M4 API, M5 recovery, M6 CI acceptance) remain pending.
+> Status: M1 — Database Foundation, M2 — Data Validation & OSM Ingestion (Node-only streaming extraction), and M3 — Transactional Publication (strict fail-closed eligibility, immutable pre-publication recovery artifacts, atomic guarded in-place publication, idempotency, concurrency control, fault injection, and reader isolation) implemented and verified against PostgreSQL 16 / PostGIS 3.4 using synthetic fixtures. Independently verified post-2025 Ho Chi Minh City boundary fixtures, Way/Relation geometry extraction, and later milestones (M4 API, M5 controlled recovery execution, M6 CI acceptance) remain pending.
 
 ## Overview
 
@@ -75,7 +75,7 @@ See [Acceptance Policy](docs/ACCEPTANCE_POLICY.md).
 - [x] Repository bootstrap
 - [x] Database foundation (M1.1–M1.5: PostGIS Docker setup, five SQLAlchemy 2.x models, Alembic initial migration, constraint & migration integration tests, compliance remediation)
 - [x] Data ingestion and validation (M2.1–M2.6: canonical models, Vietnamese `name_search` normalization, deterministic 5-category mapping, streaming Pyosmium Node-only extractor with isolated verified source snapshots, additive technical staging schema `0002_m2_staging_tables` with idempotent issue fingerprinting, source fingerprinting, strict `ST_Covers` / pass-reconciled / fail-closed readiness verification, `FOR UPDATE` row locking, and PostgreSQL/PostGIS integration & concurrency tests on synthetic fixtures; real HCMC boundary verification & Way/Relation extraction deferred)
-- [ ] Transactional publication (M3)
+- [x] Transactional publication (M3.1–M3.7: fail-closed publication eligibility separating `STAGING_READY`, `ELIGIBLE_FOR_CONTROLLED_TEST_PUBLICATION` with live test-DB isolation verification, and `ELIGIBLE_FOR_AUTHORITATIVE_PUBLICATION`; immutable `REPEATABLE READ READ ONLY` pre-publication recovery artifacts with full canonical place/duplicate/boundary EWKB baseline verification; additive trigger migrations `0003_m3_publication_guards` and `0004_m3_staging_immutability`; guarded atomic `pg_advisory_xact_lock` publication transaction with deterministic `FOR UPDATE`/`FOR SHARE` locking, in-transaction staging digest checks, conflict-aware UPSERT, scope-aware soft deactivation, canonical `duplicate_candidates` resolution with conflict rejection, bidirectional SQL `EXCEPT` pre-COMMIT verification, and atomic active-slot switching; 13-checkpoint fault-injection, deterministic concurrency, and `READ COMMITTED` / `REPEATABLE READ READ ONLY` reader isolation tests on synthetic fixtures)
 - [ ] Search endpoints (M4)
 - [ ] Recovery implementation (M5)
 - [ ] Full CI acceptance (M6)

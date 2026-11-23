@@ -35,7 +35,18 @@ from tests.helpers import (
     make_alembic_config,
 )
 
-HEAD_REVISION = "0002_m2_staging_tables"
+HEAD_REVISION = "0004_m3_staging_immutability"
+
+EXPECTED_M3_TRIGGERS_BY_TABLE: dict[str, set[str]] = {
+    "boundary_versions": {"trg_boundary_versions_guard"},
+    "import_runs": {"trg_import_runs_guard"},
+    "places": {"trg_places_identity_guard"},
+    "duplicate_candidates": {"trg_duplicate_candidates_immutable"},
+    "import_issues": {"trg_import_issues_mutate_guard", "trg_import_issues_insert_guard"},
+    "staging_place_candidates": {"trg_staging_place_candidates_immutability"},
+    "staging_run_checkpoints": {"trg_staging_run_checkpoints_immutability"},
+    "staging_issue_fingerprints": {"trg_staging_issue_fingerprints_immutability"},
+}
 
 EXPECTED_CANONICAL_TABLES = [
     "boundary_versions",
@@ -282,6 +293,25 @@ def test_g1_g2_clean_upgrade_idempotency_and_catalog_contract(
                     actual_by_table[relname].add(conname)
 
                 assert actual_by_table == EXPECTED_CONSTRAINTS_BY_TABLE
+
+                trigger_rows = conn.execute(
+                    text(
+                        """
+                        SELECT c.relname, t.tgname
+                        FROM pg_trigger t
+                        JOIN pg_class c ON c.oid = t.tgrelid
+                        JOIN pg_namespace n ON n.oid = c.relnamespace
+                        WHERE n.nspname = 'public'
+                          AND NOT t.tgisinternal
+                          AND c.relname = ANY(:tables)
+                        """
+                    ),
+                    {"tables": EXPECTED_ALL_TABLES},
+                ).fetchall()
+                actual_triggers: dict[str, set[str]] = {}
+                for relname, tgname in trigger_rows:
+                    actual_triggers.setdefault(str(relname), set()).add(str(tgname))
+                assert actual_triggers == EXPECTED_M3_TRIGGERS_BY_TABLE
         finally:
             engine.dispose()
 
@@ -448,14 +478,25 @@ def test_g6_conditional_downgrade_empty_reupgrade_and_populated_guard(
                     {"run_id": run_id},
                 )
 
+            # Non-destructive trigger-only downgrade 0003 -> 0002 succeeds on populated data,
+            # while populated staging table still blocks 0002 -> 0001 fail-closed!
+            command.downgrade(cfg, "0002_m2_staging_tables")
+            with engine.connect() as conn:
+                rev = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+                assert rev == "0002_m2_staging_tables"
+
             with pytest.raises(RuntimeError, match="Refusing destructive downgrade"):
                 command.downgrade(cfg, "0001_m1_initial_schema")
 
             with engine.connect() as conn:
                 rev = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-                assert rev == HEAD_REVISION
+                assert rev == "0002_m2_staging_tables"
 
-            # Empty staging tables + populated canonical table: 0002->0001 succeeds, 0001->base refuses.
+            # Re-upgrade back to 0003 restores triggers with zero drift.
+            command.upgrade(cfg, "head")
+            assert _compute_schema_diff(db_url) == []
+
+            # Empty staging tables + populated canonical table: 0003->0001 succeeds, 0001->base refuses.
             with engine.begin() as conn:
                 conn.execute(
                     text("DELETE FROM staging_run_checkpoints WHERE import_run_id = :run_id"),
