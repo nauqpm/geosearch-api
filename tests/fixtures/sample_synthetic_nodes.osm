@@ -1,0 +1,91 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!-- Synthetic M2 test fixture only; NOT an authoritative Ho Chi Minh City geographic dataset. -->
+<osm version="0.6" generator="geosearch-m2-fixture">
+  <!-- 1. Valid cafe with Vietnamese name, address, and extra tags -->
+  <node id="1001" version="3" changeset="5001" timestamp="2026-01-10T08:00:00Z" lat="10.7769000" lon="106.7009000">
+    <tag k="amenity" v="cafe"/>
+    <tag k="name" v="Cà Phê Sữa Đá"/>
+    <tag k="addr:housenumber" v="12"/>
+    <tag k="addr:street" v="Lê Lợi"/>
+    <tag k="addr:district" v="Quận 1"/>
+    <tag k="cuisine" v="coffee_shop"/>
+  </node>
+
+  <!-- 2. Valid restaurant -->
+  <node id="1002" version="2" changeset="5002" timestamp="2026-01-11T09:30:00Z" lat="10.7810000" lon="106.6950000">
+    <tag k="amenity" v="restaurant"/>
+    <tag k="name" v="  Quán   Phở Đêm  "/>
+    <tag k="opening_hours" v="18:00-02:00"/>
+  </node>
+
+  <!-- 3. Valid unnamed ATM -->
+  <node id="1003" version="1" changeset="5003" timestamp="2026-01-12T10:00:00Z" lat="10.7750000" lon="106.7020000">
+    <tag k="amenity" v="atm"/>
+    <tag k="operator" v="Vietcombank"/>
+  </node>
+
+  <!-- 4. Valid named ATM -->
+  <node id="1004" version="1" changeset="5004" timestamp="2026-01-12T11:00:00Z" lat="10.7755000" lon="106.7025000">
+    <tag k="amenity" v="atm"/>
+    <tag k="name" v="ATM Đakao"/>
+  </node>
+
+  <!-- 5. Valid pharmacy -->
+  <node id="1005" version="4" changeset="5005" timestamp="2026-01-13T12:00:00Z" lat="10.7900000" lon="106.6850000">
+    <tag k="amenity" v="pharmacy"/>
+    <tag k="name" v="Nhà Thuốc Đắc Lợi"/>
+    <tag k="addr:full" v="45 Điện Biên Phủ, Quận 3"/>
+  </node>
+
+  <!-- 6. Valid supermarket -->
+  <node id="1006" version="2" changeset="5006" timestamp="2026-01-14T14:00:00Z" lat="10.7720000" lon="106.7040000">
+    <tag k="shop" v="supermarket"/>
+    <tag k="name" v="Siêu Thị Đồng Khởi"/>
+  </node>
+
+  <!-- 7. Unsupported ordinary node (no tags) -->
+  <node id="2001" version="1" changeset="5010" timestamp="2026-01-15T00:00:00Z" lat="10.7700000" lon="106.7000000"/>
+
+  <!-- 8. Unsupported highway node -->
+  <node id="2002" version="1" changeset="5011" timestamp="2026-01-15T00:01:00Z" lat="10.7701000" lon="106.7001000">
+    <tag k="highway" v="traffic_signals"/>
+  </node>
+
+  <!-- 9. Unsupported amenity (hospital) -->
+  <node id="2003" version="1" changeset="5012" timestamp="2026-01-15T00:02:00Z" lat="10.7702000" lon="106.7002000">
+    <tag k="amenity" v="hospital"/>
+    <tag k="name" v="Bệnh Viện Synthetic"/>
+  </node>
+
+  <!-- 10. Unsupported shop (convenience) -->
+  <node id="2004" version="1" changeset="5013" timestamp="2026-01-15T00:03:00Z" lat="10.7703000" lon="106.7003000">
+    <tag k="shop" v="convenience"/>
+    <tag k="name" v="Cửa Hàng Tiện Lợi"/>
+  </node>
+
+  <!-- 11. Invalid supported node: cafe missing required name -->
+  <node id="3001" version="1" changeset="5020" timestamp="2026-01-16T00:00:00Z" lat="10.7780000" lon="106.6980000">
+    <tag k="amenity" v="cafe"/>
+  </node>
+
+  <!-- 12. Invalid supported node: restaurant with blank name -->
+  <node id="3002" version="1" changeset="5021" timestamp="2026-01-16T00:01:00Z" lat="10.7785000" lon="106.6985000">
+    <tag k="amenity" v="restaurant"/>
+    <tag k="name" v="   "/>
+  </node>
+
+  <!-- 13. Ambiguous supported node: cafe + supermarket -->
+  <node id="3003" version="1" changeset="5022" timestamp="2026-01-16T00:02:00Z" lat="10.7790000" lon="106.6990000">
+    <tag k="amenity" v="cafe"/>
+    <tag k="shop" v="supermarket"/>
+    <tag k="name" v="Combo Cafe Mart"/>
+  </node>
+
+  <!-- Way element included to verify Node-only extractor ignores Ways safely -->
+  <way id="9001" version="1" changeset="5030" timestamp="2026-01-16T01:00:00Z">
+    <nd ref="2001"/>
+    <nd ref="2002"/>
+    <tag k="amenity" v="cafe"/>
+    <tag k="name" v="Way Cafe Ignored In Node Only Mode"/>
+  </way>
+</osm>

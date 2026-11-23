@@ -27,6 +27,13 @@ from geosearch.db.models import (
     ImportRun,
     Place,
 )
+from geosearch.db.staging import (
+    STAGING_EXTRACTION_SCOPES,
+    STAGING_RUN_STATES,
+    StagingIssueFingerprint,
+    StagingPlaceCandidate,
+    StagingRunCheckpoint,
+)
 from geosearch.db.types import (
     InvalidCoordinateError,
     PostGISGeography,
@@ -51,6 +58,11 @@ __all__ = [
     "Place",
     "PostGISGeography",
     "PostGISGeometry",
+    "STAGING_EXTRACTION_SCOPES",
+    "STAGING_RUN_STATES",
+    "StagingIssueFingerprint",
+    "StagingPlaceCandidate",
+    "StagingRunCheckpoint",
     "UnsafeDatabaseConfigError",
     "build_disposable_test_database_name",
     "create_db_engine",

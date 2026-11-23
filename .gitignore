@@ -221,3 +221,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Large OpenStreetMap extracts (never commit raw PBF datasets)
+*.osm.pbf
+*.osm.bz2
+

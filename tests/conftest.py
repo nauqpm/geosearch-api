@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Callable, Generator
 from contextlib import AbstractContextManager, contextmanager
+from pathlib import Path
+import tempfile
 
 import pytest
 from dotenv import load_dotenv
@@ -153,3 +155,13 @@ def disposable_database(
             yield url
 
     return _factory
+
+
+@pytest.fixture()
+def work_dir() -> Generator[Path, None, None]:
+    """Isolated temporary directory for test fixture files without shared basetemp ACL issues."""
+    with tempfile.TemporaryDirectory(
+        prefix="geosearch_test_",
+        ignore_cleanup_errors=True,
+    ) as tmp_dir:
+        yield Path(tmp_dir)

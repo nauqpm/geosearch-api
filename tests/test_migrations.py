@@ -35,6 +35,8 @@ from tests.helpers import (
     make_alembic_config,
 )
 
+HEAD_REVISION = "0002_m2_staging_tables"
+
 EXPECTED_CANONICAL_TABLES = [
     "boundary_versions",
     "duplicate_candidates",
@@ -42,6 +44,14 @@ EXPECTED_CANONICAL_TABLES = [
     "import_runs",
     "places",
 ]
+
+EXPECTED_STAGING_TABLES = [
+    "staging_issue_fingerprints",
+    "staging_place_candidates",
+    "staging_run_checkpoints",
+]
+
+EXPECTED_ALL_TABLES = sorted(EXPECTED_CANONICAL_TABLES + EXPECTED_STAGING_TABLES)
 
 EXPECTED_CONSTRAINTS_BY_TABLE: dict[str, set[str]] = {
     "boundary_versions": {
@@ -116,6 +126,61 @@ EXPECTED_CONSTRAINTS_BY_TABLE: dict[str, set[str]] = {
         "ck_duplicate_candidates_distance_meters_non_negative",
         "ck_duplicate_candidates_evidence_json_object",
     },
+    "staging_place_candidates": {
+        "pk_staging_place_candidates",
+        "fk_staging_place_candidates_import_run_id_import_runs",
+        "uq_staging_place_candidates_run_osm_identity",
+        "ck_staging_place_candidates_osm_type_domain",
+        "ck_staging_place_candidates_osm_id_positive",
+        "ck_staging_place_candidates_category_domain",
+        "ck_staging_place_candidates_name_required_non_atm",
+        "ck_staging_place_candidates_name_non_blank",
+        "ck_staging_place_candidates_name_search_consistency",
+        "ck_staging_place_candidates_address_non_blank",
+        "ck_staging_place_candidates_raw_tags_json_object",
+        "ck_staging_place_candidates_location_non_empty",
+        "ck_staging_place_candidates_location_finite_wgs84",
+        "ck_staging_place_candidates_osm_version_positive",
+        "ck_staging_place_candidates_osm_changeset_positive",
+        "ck_staging_place_candidates_content_digest_format",
+        "ck_staging_place_candidates_source_provenance_json_object",
+        "ck_staging_place_candidates_last_seen_pass_positive",
+    },
+    "staging_issue_fingerprints": {
+        "pk_staging_issue_fingerprints",
+        "fk_staging_issue_fingerprints_import_run_id_import_runs",
+        "fk_staging_issue_fingerprints_import_issue_id_import_issues",
+        "uq_staging_issue_fingerprints_import_issue_id",
+        "ck_staging_issue_fingerprints_fingerprint_format",
+    },
+    "staging_run_checkpoints": {
+        "pk_staging_run_checkpoints",
+        "fk_staging_run_checkpoints_import_run_id_import_runs",
+        "ck_staging_run_checkpoints_extraction_scope_domain",
+        "ck_staging_run_checkpoints_staging_state_domain",
+        "ck_staging_run_checkpoints_source_fingerprint_non_blank",
+        "ck_staging_run_checkpoints_source_checksum_sha256_format",
+        "ck_staging_run_checkpoints_current_pass_positive",
+        "ck_staging_run_checkpoints_resume_count_non_negative",
+        "ck_staging_run_checkpoints_batches_committed_non_negative",
+        "ck_staging_run_checkpoints_total_nodes_seen_non_negative",
+        "ck_staging_run_checkpoints_supported_nodes_non_negative",
+        "ck_staging_run_checkpoints_unsupported_nodes_non_negative",
+        "ck_staging_run_checkpoints_valid_emitted_non_negative",
+        "ck_staging_run_checkpoints_invalid_emitted_non_negative",
+        "ck_staging_run_checkpoints_pass_inserted_non_negative",
+        "ck_staging_run_checkpoints_pass_conflict_non_negative",
+        "ck_staging_run_checkpoints_staged_count_non_negative",
+        "ck_staging_run_checkpoints_outside_count_non_negative",
+        "ck_staging_run_checkpoints_dup_identical_non_negative",
+        "ck_staging_run_checkpoints_conflict_count_non_negative",
+        "ck_staging_run_checkpoints_issue_count_non_negative",
+        "ck_staging_run_checkpoints_last_osm_id_positive",
+        "ck_staging_run_checkpoints_readiness_evidence_json_object",
+        "ck_staging_run_checkpoints_node_counts_consistent",
+        "ck_staging_run_checkpoints_extracted_pass_accounting",
+        "ck_staging_run_checkpoints_lifecycle_consistency",
+    },
 }
 
 
@@ -158,7 +223,7 @@ def test_g1_g2_clean_upgrade_idempotency_and_catalog_contract(
         try:
             with engine.connect() as conn:
                 rev = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-                assert rev == "0001_m1_initial_schema"
+                assert rev == HEAD_REVISION
 
                 tables = conn.execute(
                     text(
@@ -170,7 +235,7 @@ def test_g1_g2_clean_upgrade_idempotency_and_catalog_contract(
                         """
                     )
                 ).scalars().all()
-                assert tables == EXPECTED_CANONICAL_TABLES
+                assert tables == EXPECTED_ALL_TABLES
 
                 spatial_types = conn.execute(
                     text(
@@ -180,7 +245,7 @@ def test_g1_g2_clean_upgrade_idempotency_and_catalog_contract(
                         JOIN pg_class c ON c.oid = a.attrelid
                         JOIN pg_namespace n ON n.oid = c.relnamespace
                         WHERE n.nspname = 'public'
-                          AND c.relname IN ('boundary_versions', 'places')
+                          AND c.relname IN ('boundary_versions', 'places', 'staging_place_candidates')
                           AND a.attname IN ('geom', 'location')
                           AND NOT a.attisdropped
                         ORDER BY c.relname, a.attname
@@ -190,6 +255,7 @@ def test_g1_g2_clean_upgrade_idempotency_and_catalog_contract(
                 assert spatial_types == [
                     ("boundary_versions", "geom", "geometry(MultiPolygon,4326)"),
                     ("places", "location", "geography(Point,4326)"),
+                    ("staging_place_candidates", "location", "geography(Point,4326)"),
                 ]
 
                 rows = conn.execute(
@@ -203,10 +269,10 @@ def test_g1_g2_clean_upgrade_idempotency_and_catalog_contract(
                           AND c.relname = ANY(:tables)
                         """
                     ),
-                    {"tables": EXPECTED_CANONICAL_TABLES},
+                    {"tables": EXPECTED_ALL_TABLES},
                 ).fetchall()
 
-                actual_by_table: dict[str, set[str]] = {t: set() for t in EXPECTED_CANONICAL_TABLES}
+                actual_by_table: dict[str, set[str]] = {t: set() for t in EXPECTED_ALL_TABLES}
                 for relname, conname, contype, convalidated, confdeltype in rows:
                     assert convalidated is True, f"Constraint {conname} on {relname} is not validated"
                     if contype == "f":
@@ -309,7 +375,7 @@ def test_g5_failed_ddl_transaction_rolls_back_atomically(
 
             with engine.connect() as conn:
                 rev = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-                assert rev == "0001_m1_initial_schema"
+                assert rev == HEAD_REVISION
                 probe_exists = conn.execute(
                     text("SELECT to_regclass('public.partial_migration_probe')")
                 ).scalar_one()
@@ -339,7 +405,7 @@ def test_g6_conditional_downgrade_empty_reupgrade_and_populated_guard(
                           AND tablename = ANY(:tables)
                         """
                     ),
-                    {"tables": EXPECTED_CANONICAL_TABLES},
+                    {"tables": EXPECTED_ALL_TABLES},
                 ).scalars().all()
                 assert remaining == []
         finally:
@@ -349,11 +415,52 @@ def test_g6_conditional_downgrade_empty_reupgrade_and_populated_guard(
         command.upgrade(cfg, "head")
         assert _compute_schema_diff(db_url) == []
 
-        # Populated DB: downgrade must fail closed and preserve committed data.
+        # Populated staging table: downgrade 0002 -> 0001 must fail closed and stay at HEAD_REVISION.
         engine = create_test_engine(db_url, pool_size=1, max_overflow=0)
         try:
             with engine.begin() as conn:
                 bv_id = insert_boundary_version(conn, version_code="populated-guard-v1")
+                run_id = conn.execute(
+                    text(
+                        """
+                        INSERT INTO import_runs (
+                            boundary_version_id, source_name, source_checksum_sha256,
+                            source_fingerprint, pipeline_version, normalizer_version, config_digest
+                        )
+                        VALUES (
+                            :bv_id, 'fixture.osm', repeat('a', 64),
+                            'fp-guard', '0.2.0', '0.2.0', 'cfg-guard'
+                        )
+                        RETURNING id
+                        """
+                    ),
+                    {"bv_id": bv_id},
+                ).scalar_one()
+                conn.execute(
+                    text(
+                        """
+                        INSERT INTO staging_run_checkpoints (
+                            import_run_id, source_fingerprint, source_checksum_sha256
+                        )
+                        VALUES (:run_id, 'fp-guard', repeat('a', 64))
+                        """
+                    ),
+                    {"run_id": run_id},
+                )
+
+            with pytest.raises(RuntimeError, match="Refusing destructive downgrade"):
+                command.downgrade(cfg, "0001_m1_initial_schema")
+
+            with engine.connect() as conn:
+                rev = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+                assert rev == HEAD_REVISION
+
+            # Empty staging tables + populated canonical table: 0002->0001 succeeds, 0001->base refuses.
+            with engine.begin() as conn:
+                conn.execute(
+                    text("DELETE FROM staging_run_checkpoints WHERE import_run_id = :run_id"),
+                    {"run_id": run_id},
+                )
 
             with pytest.raises(RuntimeError, match="Refusing destructive downgrade"):
                 command.downgrade(cfg, "base")
@@ -627,4 +734,4 @@ command.check(cfg)
         assert result.returncode == 0, (
             f"Alembic core-only workflow failed:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
-        assert "0001_m1_initial_schema" in result.stdout
+        assert HEAD_REVISION in result.stdout

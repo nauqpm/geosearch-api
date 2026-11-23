@@ -2,7 +2,7 @@
 
 A location-based place discovery service powered by Python, FastAPI, PostgreSQL/PostGIS, and OpenStreetMap data.
 
-> Status: M1 — Database Foundation (including M1.5 architecture compliance remediation) implemented and verified against PostgreSQL 16 / PostGIS 3.4, pending review before M2. Later milestones (ingestion, publication, API, recovery) are not yet implemented.
+> Status: M1 — Database Foundation and M2 — Data Validation & OSM Ingestion (Node-only streaming extraction, deterministic validation/normalization, technical staging, import issues, and readiness verification) implemented and verified against PostgreSQL 16 / PostGIS 3.4 using synthetic fixtures. Independently verified post-2025 Ho Chi Minh City boundary fixtures, Way/Relation geometry extraction, and later milestones (M3 publication, M4 API, M5 recovery, M6 CI acceptance) remain pending.
 
 ## Overview
 
@@ -74,7 +74,7 @@ See [Acceptance Policy](docs/ACCEPTANCE_POLICY.md).
 - [x] Database integrity architecture specification
 - [x] Repository bootstrap
 - [x] Database foundation (M1.1–M1.5: PostGIS Docker setup, five SQLAlchemy 2.x models, Alembic initial migration, constraint & migration integration tests, compliance remediation)
-- [ ] Data ingestion and validation (M2)
+- [x] Data ingestion and validation (M2.1–M2.6: canonical models, Vietnamese `name_search` normalization, deterministic 5-category mapping, streaming Pyosmium Node-only extractor with isolated verified source snapshots, additive technical staging schema `0002_m2_staging_tables` with idempotent issue fingerprinting, source fingerprinting, strict `ST_Covers` / pass-reconciled / fail-closed readiness verification, `FOR UPDATE` row locking, and PostgreSQL/PostGIS integration & concurrency tests on synthetic fixtures; real HCMC boundary verification & Way/Relation extraction deferred)
 - [ ] Transactional publication (M3)
 - [ ] Search endpoints (M4)
 - [ ] Recovery implementation (M5)
@@ -111,10 +111,20 @@ GeoSearch strictly separates development and test database configuration:
    alembic current
    alembic check
    ```
-5. Run the PostgreSQL/PostGIS integration test suite against `TEST_DATABASE_URL`:
+5. Run the full unit and PostgreSQL/PostGIS integration test suite against `TEST_DATABASE_URL`:
    ```bash
    pytest -v
    ```
+
+## OSM Data Ingestion (M2 — Node-Only Staging)
+
+- **Supplying a real OSM source file later**: Download a Geofabrik Vietnam `.osm.pbf` extract locally (never commit `*.osm.pbf` files to Git; they are ignored in `.gitignore`), verify its SHA-256 checksum via `geosearch.ingestion.compute_file_sha256`, and supply the file path and an existing `boundary_versions.id` to `geosearch.ingestion.ingest_osm_nodes_to_staging(...)`.
+- **Current ingestion scope**: M2 performs streaming, bounded-memory **Node-only** extraction (`extraction_scope="node_only"`) from an isolated verified source snapshot into run-scoped technical staging tables (`staging_place_candidates`, `staging_issue_fingerprints`, `staging_run_checkpoints`) and `import_issues` without modifying the live `places` table.
+- **Deferred items**:
+  - Way and Relation geometry extraction (requires node-location caching / polygon centroid or representative-point design).
+  - Authoritative post-2025 Ho Chi Minh City boundary polygon (including former Binh Duong, former Ba Ria–Vung Tau, and Con Dao) and independently verified geographic reference fixtures.
+  - Approved Vietnamese address formatting rules (M2 uses a minimal lossless extraction from `addr:full` / present `addr:*` tags while preserving all original tags in `raw_tags`).
+  - Live dataset publication, advisory locks, active-slot switching, and recovery (M3 / M5).
 
 ## Data Attribution
 

@@ -1,6 +1,6 @@
 # GeoSearch API — Implementation Plan
 
-Status: IN PROGRESS (M1.1–M1.5 implemented and verified; awaiting review before M2)
+Status: IN PROGRESS (M1.1–M1.5 and M2.1–M2.6 implemented and verified on synthetic fixtures; ready for M2 sign-off review before M3)
 
 ## Working Principles
 
@@ -53,18 +53,20 @@ Implement M1 in small tasks:
 ## M2 — Data Validation & OSM Ingestion
 
 Deliverables:
-- Canonical data models
-- Name/category/coordinate validators
-- OSM Node extraction
-- Deterministic staging
-- Import issues and quarantine
-- Verified synthetic ingestion fixtures
+- Canonical data models (`src/geosearch/ingestion/models.py`) — completed (M2.1)
+- Name/category/coordinate validators (`src/geosearch/ingestion/validation.py`, `classification.py`) — completed (M2.1–M2.2)
+- OSM Node extraction (`src/geosearch/ingestion/osm_extractor.py`) — completed (M2.3, Node-only)
+- Deterministic staging (`src/geosearch/db/staging.py`, migration `0002_m2_staging_tables`, `src/geosearch/ingestion/fingerprint.py`, `staging.py`, `pipeline.py`) — completed (M2.4)
+- Import issues and quarantine (`import_issues` integration & conflict quarantine) — completed (M2.4)
+- Verified synthetic ingestion fixtures (`tests/fixtures/sample_synthetic_nodes.osm`, dynamic `.osm.pbf` fixtures, `tests/test_m2_*.py`) — completed (M2.5)
+- M2.6 Data Integrity & Compliance Remediation (idempotent `staging_issue_fingerprints` registry, separated pass vs cumulative counters, isolated verified source snapshots + pre/post checksum verification, strict `ST_Covers` + non-empty + zero-stale-row readiness verification, `FOR UPDATE` per-run row locking, Unicode `Cf` & semicolon fixes, deterministic concurrency & SQL CHECK tests) — completed (M2.6)
 
 Acceptance:
-- Invalid data does not enter canonical places
-- Source provenance is retained
-- Same OSM identity remains unique
-- Incomplete imports never deactivate live data
+- Invalid data does not enter canonical staging or live places (verified)
+- Source provenance and reproducible fingerprints are retained (verified)
+- Same OSM identity remains unique per run without overwriting conflicts (verified)
+- Incomplete imports never pass readiness checks or modify live places (verified)
+- Independently verified post-2025 Ho Chi Minh City geographic boundary and reference fixtures remain pending external authoritative data (not fabricated via synthetic fixtures)
 
 Ways and Relations are later incremental tasks.
 
@@ -145,6 +147,6 @@ Each completed task must report:
 
 ## Current Task
 
-M1.5 — Architecture Compliance Remediation (complete; awaiting sign-off review before starting M2).
+M2.6 — Data Integrity & Compliance Remediation (M2.1–M2.6 complete and verified on synthetic fixtures; awaiting sign-off review before starting M3).
 
-Do not implement M2 or later milestones until M1 is reviewed and M2 is explicitly assigned.
+Do not implement M3 or later milestones until M2 is reviewed and M3 is explicitly assigned.

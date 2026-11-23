@@ -19,8 +19,9 @@ from geosearch.db.types import (
     make_alembic_include_object,
 )
 
-# Ensure all canonical models are registered on Base.metadata.
+# Ensure all canonical and technical staging models are registered on Base.metadata.
 import geosearch.db.models  # noqa: F401
+import geosearch.db.staging  # noqa: F401
 
 
 def _load_optional_dotenv() -> None:
