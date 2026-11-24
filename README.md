@@ -2,104 +2,103 @@
 
 A location-based place discovery service powered by Python, FastAPI, PostgreSQL/PostGIS, and OpenStreetMap data.
 
-> Status: M1 — Database Foundation, M2 — Data Validation & OSM Ingestion (Node-only streaming extraction), and M3 — Transactional Publication (strict fail-closed eligibility, immutable pre-publication recovery artifacts, atomic guarded in-place publication, idempotency, concurrency control, fault injection, and reader isolation) implemented and verified against PostgreSQL 16 / PostGIS 3.4 using synthetic fixtures. Independently verified post-2025 Ho Chi Minh City boundary fixtures, Way/Relation geometry extraction, and later milestones (M4 API, M5 controlled recovery execution, M6 CI acceptance) remain pending.
+> Status: M1 — Database Foundation, M2 — Data Validation & OSM Ingestion (Node-only streaming extraction), M3 — Transactional Publication, and M4 — Read-Only Search API (`GET /health`, `GET /api/v1/places`, `GET /api/v1/places/nearby`, `GET /api/v1/places/{id}`) implemented and verified against PostgreSQL 16 / PostGIS 3.4 using synthetic fixtures. Independently verified post-2025 Ho Chi Minh City boundary fixtures, Way/Relation geometry extraction, M5 controlled recovery execution, M6 CI evidence aggregation, and dedicated indexing optimization remain pending.
 
 ## Overview
 
-GeoSearch API is a backend engineering project focused on building reliable geospatial search capabilities using real-world OpenStreetMap data.
+GeoSearch API is a backend engineering project focused on building reliable geospatial search capabilities using OpenStreetMap data.
 
-The service aims to support keyword search, category filtering, nearby place discovery, and place details within the defined Ho Chi Minh City geographic scope.
+The service exposes a read-only REST API supporting keyword search (with Vietnamese diacritic normalization), approved category filtering, WGS84 PostGIS nearby radius discovery, and stable place details over the currently published canonical dataset.
 
-Beyond REST API development, the project explores database integrity, deterministic data ingestion, idempotency, transactional publication, controlled recovery, and automated testing.
+Beyond REST API development, the project enforces database integrity, deterministic data ingestion, idempotency, transactional publication, controlled recovery preparation, and automated PostgreSQL/PostGIS integration testing.
 
-## Planned Technology Stack
+## Technology Stack
 
-- Python and FastAPI
-- SQLAlchemy and Alembic
-- PostgreSQL with PostGIS
-- Pytest
+- Python 3.12 and FastAPI / Pydantic v2 / Uvicorn
+- SQLAlchemy 2.x, Psycopg 3, and Alembic
+- PostgreSQL 16 with PostGIS 3.4
+- Pytest and HTTPX TestClient
 - Docker Compose
 - OpenStreetMap data and Pyosmium
-- GitHub Actions
+- GitHub Actions (planned in M6)
 
-## Planned API Endpoints
+## API Endpoints (M4 — Implemented, Read-Only)
 
-| Method | Endpoint | Purpose |
-|---|---|---|
-| GET | `/health` | Service health |
-| GET | `/api/v1/places` | Search by keyword and category |
-| GET | `/api/v1/places/nearby` | Find places within a radius |
-| GET | `/api/v1/places/{id}` | Retrieve place details |
+| Method | Endpoint | Purpose | Isolation Mode |
+|---|---|---|---|
+| GET | `/health` | Process liveness and lightweight PostgreSQL readiness | `READ COMMITTED READ ONLY` |
+| GET | `/api/v1/places` | List and search active places by Vietnamese keyword and category with bounded pagination | `REPEATABLE READ READ ONLY` |
+| GET | `/api/v1/places/nearby` | Find active places within a WGS84 geodesic radius in meters using PostGIS | `REPEATABLE READ READ ONLY` |
+| GET | `/api/v1/places/{id}` | Retrieve public details of one active place by stable internal `places.id` | `READ COMMITTED READ ONLY` |
 
-These endpoints are planned, not yet implemented.
+Interactive OpenAPI documentation is served by FastAPI at `/docs` and `/openapi.json`.
 
-## MVP Geographic Scope
+All public endpoints are strictly **read-only** (`GET` only, PostgreSQL `READ ONLY` transactions). The API never runs migrations on startup, never ingests OSM files automatically, never exposes staging tables, and never mutates canonical place or publication state.
 
-Ho Chi Minh City, Vietnam, using the administrative scope following the 2025 reorganization, including the areas formerly associated with Binh Duong and Ba Ria–Vung Tau, and Con Dao.
+## MVP Geographic Scope & Dataset Limitations
 
-Boundary data must be independently verified before being accepted for publication.
+- **Approved Geographic Scope**: Ho Chi Minh City, Vietnam, using the administrative scope following the 2025 reorganization (including the formerly separate Binh Duong and Ba Ria–Vung Tau areas and Con Dao). Boundary data must be independently verified before authoritative publication.
+- **Current Dataset Limitations (Explicitly Distinguished from API Completeness)**:
+  - M4 API implementation and PostgreSQL/PostGIS verification use controlled synthetic `node_only` fixtures in isolated disposable test databases.
+  - Authoritative post-2025 Ho Chi Minh City boundary verification and Way/Relation geometry extraction remain deferred (`node_only_incomplete_osm_coverage`), so production-wide `AUTHORITATIVE` publication remains blocked by M3 safeguards.
+  - Dedicated search/spatial indexing optimization (e.g., GIST, GIN, trigram, partial indexes) requires a separate approved indexing strategy and is intentionally not included in M4.
 
-## Initial Place Categories
+## Approved Place Categories
 
-- cafe
-- restaurant
-- atm
-- pharmacy
-- supermarket
+Exactly five canonical MVP categories are accepted:
 
-## Engineering Goals
+- `cafe`
+- `restaurant`
+- `atm`
+- `pharmacy`
+- `supermarket`
 
-1. Build reliable REST APIs for geospatial place discovery.
-2. Ingest and normalize OpenStreetMap data deterministically.
-3. Preserve stable OSM identities during repeated imports.
-4. Publish validated datasets atomically.
-5. Protect historical audit and enable controlled recovery.
-6. Verify correctness with PostgreSQL/PostGIS integration tests.
-7. Maintain traceability between invariants, tests, and CI evidence.
+Unsupported category values are rejected with HTTP `422` (never silently mapped to a fallback).
 
-## Architecture
+## Architecture & Governance Documents
 
-See [Architecture Baseline](docs/ARCHITECTURE_BASELINE.md) for approved engineering decisions.
-
-## Development Roadmap
-
-See [Implementation Plan](docs/IMPLEMENTATION_PLAN.md).
-
-## Testing and Acceptance
-
-See [Acceptance Policy](docs/ACCEPTANCE_POLICY.md).
+- [Architecture Baseline](docs/ARCHITECTURE_BASELINE.md) — approved engineering decisions
+- [Implementation Plan](docs/IMPLEMENTATION_PLAN.md) — milestone roadmap and status
+- [Acceptance Policy](docs/ACCEPTANCE_POLICY.md) — verification and sign-off rules
 
 ## Current Status
 
 - [x] Database integrity architecture specification
-- [x] Repository bootstrap
-- [x] Database foundation (M1.1–M1.5: PostGIS Docker setup, five SQLAlchemy 2.x models, Alembic initial migration, constraint & migration integration tests, compliance remediation)
-- [x] Data ingestion and validation (M2.1–M2.6: canonical models, Vietnamese `name_search` normalization, deterministic 5-category mapping, streaming Pyosmium Node-only extractor with isolated verified source snapshots, additive technical staging schema `0002_m2_staging_tables` with idempotent issue fingerprinting, source fingerprinting, strict `ST_Covers` / pass-reconciled / fail-closed readiness verification, `FOR UPDATE` row locking, and PostgreSQL/PostGIS integration & concurrency tests on synthetic fixtures; real HCMC boundary verification & Way/Relation extraction deferred)
-- [x] Transactional publication (M3.1–M3.7: fail-closed publication eligibility separating `STAGING_READY`, `ELIGIBLE_FOR_CONTROLLED_TEST_PUBLICATION` with live test-DB isolation verification, and `ELIGIBLE_FOR_AUTHORITATIVE_PUBLICATION`; immutable `REPEATABLE READ READ ONLY` pre-publication recovery artifacts with full canonical place/duplicate/boundary EWKB baseline verification; additive trigger migrations `0003_m3_publication_guards` and `0004_m3_staging_immutability`; guarded atomic `pg_advisory_xact_lock` publication transaction with deterministic `FOR UPDATE`/`FOR SHARE` locking, in-transaction staging digest checks, conflict-aware UPSERT, scope-aware soft deactivation, canonical `duplicate_candidates` resolution with conflict rejection, bidirectional SQL `EXCEPT` pre-COMMIT verification, and atomic active-slot switching; 13-checkpoint fault-injection, deterministic concurrency, and `READ COMMITTED` / `REPEATABLE READ READ ONLY` reader isolation tests on synthetic fixtures)
-- [ ] Search endpoints (M4)
-- [ ] Recovery implementation (M5)
-- [ ] Full CI acceptance (M6)
+- [x] Repository bootstrap (M0)
+- [x] Database foundation (M1.1–M1.5: PostGIS Docker setup, five SQLAlchemy 2.x canonical models, Alembic initial migration `0001`, constraint & G1–G6 migration integration tests)
+- [x] Data ingestion and validation (M2.1–M2.6: canonical models, Vietnamese `name_search` normalization, deterministic 5-category mapping, streaming Pyosmium Node-only extractor with verified source snapshots, technical staging schema `0002`, idempotent issue fingerprinting, `ST_Covers` readiness verification)
+- [x] Transactional publication (M3.1–M3.7: fail-closed eligibility tiers, immutable pre-publication recovery artifacts, trigger guards `0003` & `0004`, guarded atomic `pg_advisory_xact_lock` publication, stable `places.id` UPSERT, scope-aware soft deactivation, bidirectional SQL `EXCEPT` verification, fault-injection, concurrency, and reader isolation tests)
+- [x] Search API (M4.1–M4.6: FastAPI application factory, `/health`, `/api/v1/places`, `/api/v1/places/nearby`, `/api/v1/places/{id}`, Vietnamese search reuse, PostGIS WGS84 spheroid distance, adaptive `READ COMMITTED` / `REPEATABLE READ READ ONLY` snapshot consistency, leak-free error handling, and PostgreSQL/PostGIS HTTP integration & concurrency tests)
+- [ ] Controlled recovery execution & duplicate detection (M5)
+- [ ] Full CI & acceptance evidence aggregation (M6)
 
-## Local Database Development & Testing (M1)
+## Local Setup, Running the API & Isolated Testing
 
 ### Environment Variables: `DATABASE_URL` vs `TEST_DATABASE_URL`
 
-GeoSearch strictly separates development and test database configuration:
+GeoSearch strictly separates runtime/development and test database targets:
 
-- **`DATABASE_URL`**: Target database for `alembic` CLI commands and application runtime. Defaults in `.env.example` to the persistent `postgres_dev` container (`127.0.0.1:55432/geosearch_dev`).
-- **`TEST_DATABASE_URL`**: Target database used exclusively by `pytest` and test fixtures. Defaults in `.env.example` to the ephemeral `tmpfs`-backed `postgres_test` container (`127.0.0.1:55433/geosearch_test`).
-- Test guards fail closed if `TEST_DATABASE_URL` is unset, targets a non-local host, uses an unrecognized database name, or targets the same PostgreSQL server `(host, port)` as `DATABASE_URL` (including `localhost` / `127.0.0.1` / `::1` aliases and default port `5432`).
+- **`DATABASE_URL`**: Required by Alembic CLI migrations and the FastAPI runtime (`geosearch.api.app:create_app`). Defaults in `.env.example` to `postgres_dev` (`127.0.0.1:55432/geosearch_dev`). The API **never** falls back to `TEST_DATABASE_URL`.
+- **`TEST_DATABASE_URL`**: Used exclusively by `pytest` and test fixtures. Defaults in `.env.example` to the ephemeral `tmpfs`-backed `postgres_test` container (`127.0.0.1:55433/geosearch_test`).
+- **Precedence**: When `python-dotenv` is installed, local `.env` is loaded with `override=False`, so explicitly exported shell environment variables always take precedence. Never commit `.env` or real credentials.
+- **Optional API runtime tuning environment variables** (bounded positive integers):
+  - `GEOSEARCH_DB_POOL_SIZE` (default: `5`, range: `1..100`)
+  - `GEOSEARCH_DB_MAX_OVERFLOW` (default: `10`, range: `0..100`)
+  - `GEOSEARCH_DB_POOL_TIMEOUT` (default: `10` seconds, range: `1..120`)
+  - `GEOSEARCH_DB_CONNECT_TIMEOUT` (default: `5` seconds, range: `1..120`)
+  - `GEOSEARCH_DB_STATEMENT_TIMEOUT_MS` (default: `5000` ms, range: `100..60000`)
+  - `GEOSEARCH_HEALTH_CHECK_TIMEOUT_MS` (default: `2000` ms, range: `100..60000`)
 
 ### Setup & Verification Steps
 
-1. Create and activate a Python 3.12 virtual environment, then install the package with development dependencies:
+1. Create and activate a Python 3.12 virtual environment and install dependencies:
    ```bash
    python -m venv .venv
    # Windows PowerShell: .\.venv\Scripts\Activate.ps1
    # Linux/macOS:        source .venv/bin/activate
    pip install -e ".[dev]"
    ```
-   > Core-only installation (`pip install .`) supports the Alembic migration workflow when `DATABASE_URL` is exported directly in the environment (`python-dotenv` is optional).
+   > Core-only installation (`pip install .`) supports Alembic and FastAPI when `DATABASE_URL` is exported directly (`python-dotenv` is optional).
 2. Copy `.env.example` to `.env` (or export `DATABASE_URL` and `TEST_DATABASE_URL` in your shell).
 3. Start PostgreSQL/PostGIS containers (`postgis/postgis:16-3.4`, localhost-only ports `55432` for dev and `55433` for test):
    ```bash
@@ -111,10 +110,187 @@ GeoSearch strictly separates development and test database configuration:
    alembic current
    alembic check
    ```
-5. Run the full unit and PostgreSQL/PostGIS integration test suite against `TEST_DATABASE_URL`:
+5. Start the FastAPI server against `DATABASE_URL` using the factory entry point:
+   ```bash
+   uvicorn geosearch.api.app:create_app --factory --host 127.0.0.1 --port 8000
+   ```
+6. Run the full unit and isolated PostgreSQL/PostGIS integration test suite against `TEST_DATABASE_URL`:
    ```bash
    pytest -v
    ```
+
+## Search API Contract Reference
+
+> **Contract note**: Endpoint paths, the 5 approved categories, active-only canonical dataset semantics, Vietnamese normalization rules, WGS84 coordinate bounds, and adaptive `READ COMMITTED` / `REPEATABLE READ READ ONLY` isolation come from [Architecture Baseline](docs/ARCHITECTURE_BASELINE.md). Parameter names (`q`, `category`, `page`, `limit`, `lon`, `lat`, `radius_m`), pagination bounds, maximum radius (`50000` m), and JSON envelope shapes below are conservative M4 implementation defaults.
+
+### Coordinate Order & Distance Semantics
+
+- Coordinates are always explicit WGS84 fields: **`longitude` = X** in `[-180, 180]` and **`latitude` = Y** in `[-90, 90]`. Non-finite values (`NaN`, `Infinity`, `-Infinity`) and out-of-range coordinates are rejected with HTTP `422`.
+- Nearby queries use PostGIS `GEOGRAPHY(Point, 4326)` with **WGS84 spheroidal distance** (`use_spheroid = true`) in **meters** consistently across `ST_DWithin` membership, returned `distance_m` (`ST_Distance`), and closest-first sorting.
+
+### 1. `GET /health`
+
+Runs a bounded read-only `SELECT 1` check against PostgreSQL.
+
+- **200 OK**:
+  ```json
+  {
+    "status": "ok",
+    "service": "geosearch-api",
+    "database": "ok"
+  }
+  ```
+- **503 Service Unavailable** (database unreachable or timed out; no credentials or SQL leaked):
+  ```json
+  {
+    "status": "degraded",
+    "service": "geosearch-api",
+    "database": "unavailable"
+  }
+  ```
+
+### 2. `GET /api/v1/places`
+
+List and search active canonical places in the currently published dataset.
+
+| Parameter | Type | Default | Constraints / Notes |
+|---|---|---|---|
+| `q` | string (optional) | `null` | Max 200 chars; normalized with M2 Vietnamese normalizer (diacritics, `đ/Đ -> d`, NFC/NFD, case folding, whitespace, invisible `Cf` removal); `%`, `_`, `\` treated literally; blank/whitespace treated as no filter |
+| `category` | string[] (optional) | `null` | Repeatable parameter (`?category=cafe&category=atm`); strictly limited to the 5 approved categories |
+| `page` | integer | `1` | `1 <= page <= 100000` |
+| `limit` | integer | `20` | `1 <= limit <= 100` |
+
+Ordering: deterministic `name_search ASC NULLS LAST, id ASC`.
+
+Example request:
+```bash
+curl "http://127.0.0.1:8000/api/v1/places?q=ca+phe&category=cafe&page=1&limit=20"
+```
+
+Example response (`200 OK`):
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "osm_type": "node",
+      "osm_id": 1001,
+      "name": "Cà Phê Sài Gòn",
+      "category": "cafe",
+      "address": "12 Lê Lợi, Quận 1",
+      "longitude": 106.7011,
+      "latitude": 10.7771
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "limit": 20,
+  "has_more": false
+}
+```
+
+### 3. `GET /api/v1/places/nearby`
+
+Find active canonical places within a geodesic radius in meters.
+
+| Parameter | Type | Default | Constraints / Notes |
+|---|---|---|---|
+| `lon` | float (required) | — | Finite WGS84 longitude (X) in `[-180, 180]` |
+| `lat` | float (required) | — | Finite WGS84 latitude (Y) in `[-90, 90]` |
+| `radius_m` | float | `1000.0` | Finite meters, `0 < radius_m <= 50000` |
+| `q` | string (optional) | `null` | Same Vietnamese normalization and escaping as `/api/v1/places` |
+| `category` | string[] (optional) | `null` | Repeatable approved category filter |
+| `page` | integer | `1` | `1 <= page <= 100000` |
+| `limit` | integer | `20` | `1 <= limit <= 100` |
+
+Ordering: closest-first `distance_m ASC`, with deterministic tie-breaking `id ASC`.
+
+Example request:
+```bash
+curl "http://127.0.0.1:8000/api/v1/places/nearby?lon=106.7009&lat=10.7769&radius_m=1500&category=cafe"
+```
+
+Example response (`200 OK`):
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "osm_type": "node",
+      "osm_id": 1001,
+      "name": "Cà Phê Sài Gòn",
+      "category": "cafe",
+      "address": "12 Lê Lợi, Quận 1",
+      "longitude": 106.7011,
+      "latitude": 10.7771,
+      "distance_m": 31.21
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "limit": 20,
+  "has_more": false,
+  "center": {
+    "longitude": 106.7009,
+    "latitude": 10.7769
+  },
+  "radius_m": 1500.0
+}
+```
+
+### 4. `GET /api/v1/places/{id}`
+
+Retrieve public details of a single active place by stable internal `places.id` (`1 <= id <= 9223372036854775807`). Returns `404` for nonexistent places, inactive places, staging-only rows, or when no active publication exists. Public responses exclude internal columns such as `raw_tags`, `name_search`, `is_active`, and `last_seen_import_id`.
+
+Example request:
+```bash
+curl "http://127.0.0.1:8000/api/v1/places/1"
+```
+
+Example response (`200 OK`):
+```json
+{
+  "id": 1,
+  "osm_type": "node",
+  "osm_id": 1001,
+  "name": "Cà Phê Sài Gòn",
+  "category": "cafe",
+  "address": "12 Lê Lợi, Quận 1",
+  "longitude": 106.7011,
+  "latitude": 10.7771,
+  "osm_version": 3,
+  "osm_timestamp": "2026-01-20T00:00:00Z"
+}
+```
+
+### Error Responses
+
+All non-health API errors return a consistent JSON envelope without exposing SQL statements, credentials, connection strings, or stack traces:
+
+```json
+{
+  "error": {
+    "code": "PLACE_NOT_FOUND",
+    "message": "Place not found."
+  }
+}
+```
+
+| HTTP Status | Error Code | Meaning |
+|---|---|---|
+| `404` | `PLACE_NOT_FOUND` / `NOT_FOUND` | Requested active place or route not found |
+| `405` | `METHOD_NOT_ALLOWED` | Non-`GET` method on read-only endpoint |
+| `422` | `VALIDATION_ERROR` | Invalid path/query parameter, coordinate, radius, pagination, or category (includes sanitized `details`) |
+| `503` | `DATABASE_UNAVAILABLE` | PostgreSQL connection or pool unavailable |
+| `504` | `DATABASE_TIMEOUT` | PostgreSQL query exceeded bounded `statement_timeout` |
+| `500` | `INTERNAL_SERVER_ERROR` | Masked unexpected server failure |
+
+### Read Consistency Guarantees
+
+- **`GET /api/v1/places/{id}` & `GET /health`**: Single SQL statement under PostgreSQL `READ COMMITTED, READ ONLY`.
+- **`GET /api/v1/places` & `GET /api/v1/places/nearby`**: Multi-statement (`COUNT(*)` + paginated `SELECT`) executed inside one short PostgreSQL `REPEATABLE READ, READ ONLY` transaction on a single connection, guaranteeing `total` and `items` always reflect the exact same committed publication snapshot even during concurrent atomic V1 -> V2 publication.
+- **No cross-request snapshot guarantee**: Separate HTTP requests open separate transactions; deterministic `ORDER BY` does not guarantee cross-request pagination stability across a concurrent publication switch.
+- Ordinary API reads rely on PostgreSQL MVCC and never acquire M3 publication advisory locks.
 
 ## OSM Data Ingestion (M2 — Node-Only Staging)
 
@@ -124,7 +300,7 @@ GeoSearch strictly separates development and test database configuration:
   - Way and Relation geometry extraction (requires node-location caching / polygon centroid or representative-point design).
   - Authoritative post-2025 Ho Chi Minh City boundary polygon (including former Binh Duong, former Ba Ria–Vung Tau, and Con Dao) and independently verified geographic reference fixtures.
   - Approved Vietnamese address formatting rules (M2 uses a minimal lossless extraction from `addr:full` / present `addr:*` tags while preserving all original tags in `raw_tags`).
-  - Live dataset publication, advisory locks, active-slot switching, and recovery (M3 / M5).
+  - Controlled recovery execution, automated duplicate detection (M5), full CI acceptance aggregation (M6), and dedicated indexing optimization.
 
 ## Data Attribution
 

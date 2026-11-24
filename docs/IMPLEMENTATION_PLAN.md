@@ -1,6 +1,6 @@
 # GeoSearch API — Implementation Plan
 
-Status: IN PROGRESS (M1.1–M1.5, M2.1–M2.6, and M3.1–M3.7 implemented and verified on synthetic fixtures; ready for M3 sign-off review before M4)
+Status: IN PROGRESS (M1.1–M1.5, M2.1–M2.6, M3.1–M3.7, and M4.1–M4.6 implemented and verified on synthetic fixtures; ready for M4 sign-off review before M5)
 
 ## Working Principles
 
@@ -91,17 +91,20 @@ Acceptance:
 ## M4 — Search API
 
 Deliverables:
-- Health endpoint
-- Place details
-- Category and keyword search
-- Nearby radius search
-- Request validation and error handling
-- API integration tests
+- FastAPI application factory, configuration validation (`DATABASE_URL` isolated from `TEST_DATABASE_URL`), engine lifespan disposal, and leak-free JSON error handling (`src/geosearch/api/app.py`, `config.py`, `dependencies.py`, `errors.py`) — completed (M4.1/M4.4)
+- Health endpoint `GET /health` with bounded read-only PostgreSQL readiness probe (`src/geosearch/api/routes/health.py`) — completed (M4.1)
+- Place details `GET /api/v1/places/{id}` with active-only single-statement `READ COMMITTED READ ONLY` semantics and non-leaking public schema (`src/geosearch/api/routes/places.py`, `schemas/places.py`, `services/place_queries.py`) — completed (M4.2)
+- Category and Vietnamese-normalized keyword search `GET /api/v1/places` reusing M2 `normalize_name_search`, literal SQL `LIKE` escaping, 5-category enforcement, bounded deterministic pagination, and `REPEATABLE READ READ ONLY` snapshot consistency — completed (M4.2/M4.4)
+- PostGIS WGS84 spheroid nearby radius search `GET /api/v1/places/nearby` (`ST_DWithin` / `ST_Distance` in meters, WGS84 finiteness & bounds validation, closest-first + `id` tie-breaking, `REPEATABLE READ READ ONLY` snapshot consistency) — completed (M4.3/M4.4)
+- Real PostgreSQL/PostGIS HTTP integration, spatial, fault-injection, and publication concurrency tests (`tests/test_m4_health.py`, `test_m4_places_detail.py`, `test_m4_places_search.py`, `test_m4_nearby.py`, `test_m4_api_consistency.py`) — completed (M4.5)
+- README API contract reference and OpenAPI contract verification — completed (M4.6)
 
 Acceptance:
-- Query results match validated fixtures
-- Coordinate and radius parameters are validated
-- API reads obey adaptive isolation policy
+- Query results match validated synthetic fixtures on real PostgreSQL 16 / PostGIS 3.4 (verified)
+- Coordinate, radius, category, and pagination parameters are strictly validated (verified)
+- API reads obey adaptive isolation policy (`READ COMMITTED READ ONLY` single-statement and `REPEATABLE READ READ ONLY` multi-statement) with zero uncommitted publication leakage and zero V1/V2 snapshot mixing (verified)
+- No schema changes, no new migrations beyond `0004_m3_staging_immutability`, and no unapproved indexing strategy introduced (verified)
+- Authoritative post-2025 HCMC boundary publication, Way/Relation extraction, M5 controlled recovery execution, and M6 CI aggregation remain deferred
 
 ## M5 — Recovery & Reliability
 
@@ -148,6 +151,6 @@ Each completed task must report:
 
 ## Current Task
 
-M3.7 — Transactional Integrity & Compliance Remediation (M3.1–M3.7 complete and verified on synthetic fixtures; awaiting sign-off review before starting M4).
+M4 — Search API (M4.1–M4.6 complete and verified on synthetic fixtures; awaiting sign-off review before starting M5).
 
-Do not implement M4 or later milestones until M3 is reviewed and M4 is explicitly assigned.
+Do not implement M5 or later milestones until M4 is reviewed and M5 is explicitly assigned.
