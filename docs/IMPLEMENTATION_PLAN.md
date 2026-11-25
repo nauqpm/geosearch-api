@@ -1,6 +1,6 @@
 # GeoSearch API — Implementation Plan
 
-Status: IN PROGRESS (M1.1–M1.5, M2.1–M2.6, M3.1–M3.7, and M4.1–M4.6 implemented and verified on synthetic fixtures; ready for M4 sign-off review before M5)
+Status: IN PROGRESS (M1–M4 closed on synthetic fixtures; M5 controlled recovery & reliability implemented and verified on synthetic fixtures, pending M5 sign-off review before M6)
 
 ## Working Principles
 
@@ -104,23 +104,26 @@ Acceptance:
 - Coordinate, radius, category, and pagination parameters are strictly validated (verified)
 - API reads obey adaptive isolation policy (`READ COMMITTED READ ONLY` single-statement and `REPEATABLE READ READ ONLY` multi-statement) with zero uncommitted publication leakage and zero V1/V2 snapshot mixing (verified)
 - No schema changes, no new migrations beyond `0004_m3_staging_immutability`, and no unapproved indexing strategy introduced (verified)
-- Authoritative post-2025 HCMC boundary publication, Way/Relation extraction, M5 controlled recovery execution, and M6 CI aggregation remain deferred
+- **M4 Sign-Off**: Explicitly accepted (`IMPLEMENTATION_ACCEPTED` for the synthetic PostgreSQL/PostGIS test scope) on commit `bab6c0f260abeb01151082bb0e31256af44c29bc` (61 M4 tests / 449 total repository tests passed on PostgreSQL 16.4 / PostGIS 3.4.3).
+- Authoritative post-2025 HCMC boundary publication, Way/Relation extraction, and M6 CI aggregation remain deferred
 
 ## M5 — Recovery & Reliability
 
 Deliverables:
-- Immutable recovery artifacts
-- Manifests and content checksums
-- Controlled recovery publication
-- Historical audit preservation
-- Duplicate candidate detection and evidence
-- Recovery and fault-injection tests
+- Historical source artifact verification (`verify_historical_source_artifact`) with TOCTOU-safe isolated snapshot copying, manifest/format/checksum/JSONL/M2 `name_search`/PostGIS EWKB & `ST_Covers`/historical `import_runs` & `APPROVED` boundary provenance/stable `places.id` verification (`src/geosearch/publication/recovery.py`) — completed
+- Traceable manual approval (`RecoveryApproval`, `build_recovery_approval_from_artifact`, `validate_recovery_approval`) persisted in `staging_run_checkpoints.readiness_evidence["recovery"]` and `import_runs.publication_evidence["recovery"]` under the existing five-table schema with zero new migrations (`alembic head = 0004_m3_staging_immutability`; reviewer authentication external, no approver allowlist or dual-control requirement) — completed
+- Atomic recovery run preparation (`prepare_recovery_run`) and guarded controlled recovery execution (`execute_controlled_recovery`) reusing M3 `publish_prepared_run`, separating V1 source and V2 protection artifacts, preserving prior runs/UUIDs/`published_at`, supporting idempotent retry & lost COMMIT ack resolution, and blocking UUID repurposing (`src/geosearch/publication/recovery.py`, `models.py`, `eligibility.py`, `engine.py`) — completed
+- Approved duplicate-candidate scope (Option 2 + Option A): automated heuristic matching deferred until distance, name-matching, and scoring rules are approved; run-scoped canonical pair ordering (`place_a_id < place_b_id`), uniqueness on `(import_run_id, place_a_id, place_b_id)`, trigger-enforced immutability, retry replay safety, historical retention on original V1/V2 runs, `NOT_EXECUTED` default on recovery runs without copying historical pairs or reporting `VERIFIED_EMPTY`, and preservation of separate canonical OSM identities (no auto-merge) verified — completed
+- Isolated PostgreSQL/PostGIS recovery acceptance, 14-checkpoint pre-COMMIT fault-injection, stale approval lock-race, concurrent FastAPI `REPEATABLE READ` snapshot, and duplicate-evidence tests (`tests/test_m5_recovery_verification_and_approval.py`, `tests/test_m5_recovery_e2e_and_history.py`, `tests/test_m5_faults_concurrency_and_duplicates.py`) — completed
+- Operator recovery procedure documentation in `README.md` — completed
 
 Acceptance:
-- Artifact verification is mandatory
-- Recovery restores correct canonical content
-- Recovery uses a new run and operation ID
-- Concurrent readers see consistent snapshots
+- Artifact verification and manual approval are mandatory and fail closed without altering live state (verified)
+- Recovery restores exact canonical V1 content, membership, active boundary, stable `places.id`, and `last_seen_import_id` with distinct V1 source and V2 protection artifacts (verified)
+- Recovery uses a new `RECOVERY` run and operation UUID, preserves history, handles retries, lost COMMIT acks, and retry after supersession safely (verified)
+- Faults and stale approvals under lock leave live state consistent (verified)
+- Concurrent API readers see consistent committed snapshots with zero uncommitted leakage and zero V2/V1 mixing (verified)
+- Approved duplicate-evidence resolver and Option A recovery retention invariants verified; automated heuristic matching (Option 2) explicitly deferred pending formal matching-rule approval
 
 ## M6 — CI & Final Acceptance
 
@@ -151,6 +154,6 @@ Each completed task must report:
 
 ## Current Task
 
-M4 — Search API (M4.1–M4.6 complete and verified on synthetic fixtures; awaiting sign-off review before starting M5).
+M5 — Recovery & Reliability (implemented and technically verified on isolated synthetic PostgreSQL 16 / PostGIS 3.4 fixtures with approved Option 2 / Option A duplicate scope; awaiting M5 sign-off review before M6).
 
-Do not implement M5 or later milestones until M4 is reviewed and M5 is explicitly assigned.
+Do not implement M6 until M5 is reviewed and M6 is explicitly assigned.

@@ -17,6 +17,7 @@ from sqlalchemy import Connection
 # Derived from UTF-8 SHA-256 prefix of "geosearch.publication.active_slot.v1" masked to signed int64.
 PUBLICATION_ADVISORY_LOCK_KEY: Final[int] = 0x47535055425F5631  # "GSPUB_V1" (5139543997253654065)
 RECOVERY_ARTIFACT_FORMAT_VERSION: Final[str] = "geosearch.recovery_artifact.v1"
+RECOVERY_PIPELINE_VERSION: Final[str] = "geosearch-recovery-0.1.0"
 NODE_ONLY_COVERAGE_RESTRICTION: Final[str] = "node_only_incomplete_osm_coverage"
 
 
@@ -99,7 +100,11 @@ class PublicationConflictError(PublicationEligibilityError):
 
 
 class RecoveryArtifactError(PublicationError):
-    """Raised when a required pre-publication recovery artifact is missing, corrupt, or stale."""
+    """Raised when a required pre-publication or historical recovery artifact is invalid."""
+
+
+class RecoveryApprovalError(PublicationError):
+    """Raised when mandatory manual recovery approval is missing, malformed, or mismatched."""
 
 
 class PublicationInvariantError(PublicationError):
@@ -298,3 +303,144 @@ class PublicationResult:
     recovery_artifact: RecoveryArtifactRecord | None
     publication_evidence: dict[str, Any] = field(default_factory=dict)
     already_committed: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class RecoveryApproval:
+    """Traceable manual operator approval tied to a specific artifact, operation, and active run.
+
+    Trust assumption:
+    - This internal Python contract records durable approval provenance (`approved_by`,
+      `approved_at`, `approval_reason`) and binds it cryptographically to the verified source
+      artifact (`source_import_run_id`, `source_artifact_manifest_sha256`,
+      `source_artifact_content_sha256`), the recovery `publication_operation_id`, and
+      `expected_active_run_id`.
+    - Human reviewer authentication and authorization (verifying the identity behind
+      `approved_by`) are external to this library entry point.
+    """
+
+    approved_by: str
+    approved_at: datetime
+    approval_reason: str
+    publication_operation_id: uuid.UUID
+    source_import_run_id: int
+    source_artifact_manifest_sha256: str
+    source_artifact_content_sha256: str
+    expected_active_run_id: int | None
+
+    def to_evidence_dict(self) -> dict[str, Any]:
+        """Serialize approval metadata canonically for durable checkpoint & publication audit."""
+        from datetime import timezone
+
+        return {
+            "approved_by": self.approved_by.strip(),
+            "approved_at": self.approved_at.astimezone(timezone.utc).isoformat(),
+            "approval_reason": self.approval_reason.strip(),
+            "publication_operation_id": str(self.publication_operation_id),
+            "source_import_run_id": int(self.source_import_run_id),
+            "source_artifact_manifest_sha256": self.source_artifact_manifest_sha256,
+            "source_artifact_content_sha256": self.source_artifact_content_sha256,
+            "expected_active_run_id": (
+                int(self.expected_active_run_id)
+                if self.expected_active_run_id is not None
+                else None
+            ),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RecoveryArtifactPlaceRecord:
+    """Validated canonical place record parsed from a verified `places_snapshot.jsonl`."""
+
+    place_id: int
+    osm_type: str
+    osm_id: int
+    name: str | None
+    name_search: str | None
+    category: str
+    address: str | None
+    longitude: float
+    latitude: float
+    location_srid: int
+    location_ewkb_hex: str
+    raw_tags: dict[str, Any]
+    last_seen_import_id: int
+    is_active: bool
+    osm_version: int | None
+    osm_changeset: int | None
+    osm_timestamp: datetime | None
+    created_at: datetime | None
+    updated_at: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
+class VerifiedHistoricalRecoveryArtifact:
+    """Historical source artifact verified against disk checksums, JSONL content, and DB provenance."""
+
+    record: RecoveryArtifactRecord
+    places: tuple[RecoveryArtifactPlaceRecord, ...]
+    source_extraction_scope: str
+    source_coverage_restriction: str | None
+    source_publication_mode: str | None
+    source_run_status_in_db: str
+    source_boundary_version_code: str
+    manifest_sha256: str
+    places_file_sha256: str
+    duplicates_file_sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class RecoveryFaultHooks:
+    """Deterministic checkpoint hooks for M5 recovery preparation, TOCTOU, and publication tests."""
+
+    on_after_source_verification: Callable[[Path], None] | None = None
+    on_before_prepare_commit: Callable[[Connection], None] | None = None
+    on_after_prepare_before_publish: Callable[[int, uuid.UUID], None] | None = None
+    publication_hooks: PublicationFaultHooks | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedRecoveryRun:
+    """Summary of an atomically staged and PREPARED recovery ImportRun."""
+
+    import_run_id: int
+    publication_operation_id: uuid.UUID
+    source_artifact: RecoveryArtifactRecord
+    approval: RecoveryApproval
+    expected_active_run_id: int | None
+    boundary_version_id: int
+    staged_place_count: int
+    recovery_evidence: dict[str, Any]
+    reused_existing_run: bool = False
+    already_committed: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class RecoveryResult:
+    """Structured durable outcome returned by execute_controlled_recovery."""
+
+    publication_result: PublicationResult
+    source_artifact: RecoveryArtifactRecord
+    protection_artifact: RecoveryArtifactRecord | None
+    approval: RecoveryApproval
+    reused_prepared_run: bool = False
+
+    @property
+    def outcome(self) -> PublicationOutcomeStatus:
+        """Delegate final publication outcome (PUBLISHED or ALREADY_PUBLISHED)."""
+        return self.publication_result.outcome
+
+    @property
+    def recovery_import_run_id(self) -> int:
+        """Return the newly created (or reused) RECOVERY import_runs.id."""
+        return self.publication_result.import_run_id
+
+    @property
+    def publication_operation_id(self) -> uuid.UUID:
+        """Return the recovery publication operation UUID."""
+        return self.publication_result.publication_operation_id
+
+    @property
+    def already_committed(self) -> bool:
+        """True when retry resolved an already-committed (PUBLISHED or SUPERSEDED) recovery."""
+        return self.publication_result.already_committed

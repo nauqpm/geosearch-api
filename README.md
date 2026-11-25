@@ -2,7 +2,7 @@
 
 A location-based place discovery service powered by Python, FastAPI, PostgreSQL/PostGIS, and OpenStreetMap data.
 
-> Status: M1 — Database Foundation, M2 — Data Validation & OSM Ingestion (Node-only streaming extraction), M3 — Transactional Publication, and M4 — Read-Only Search API (`GET /health`, `GET /api/v1/places`, `GET /api/v1/places/nearby`, `GET /api/v1/places/{id}`) implemented and verified against PostgreSQL 16 / PostGIS 3.4 using synthetic fixtures. Independently verified post-2025 Ho Chi Minh City boundary fixtures, Way/Relation geometry extraction, M5 controlled recovery execution, M6 CI evidence aggregation, and dedicated indexing optimization remain pending.
+> Status: M1 — Database Foundation, M2 — Data Validation & OSM Ingestion (Node-only streaming extraction), M3 — Transactional Publication, M4 — Read-Only Search API (`GET /health`, `GET /api/v1/places`, `GET /api/v1/places/nearby`, `GET /api/v1/places/{id}`), and M5 — Controlled Recovery & Reliability implemented and verified against PostgreSQL 16 / PostGIS 3.4 using synthetic fixtures (awaiting M5 review/sign-off). Automated heuristic duplicate-matching thresholds, independently verified post-2025 Ho Chi Minh City boundary fixtures, Way/Relation geometry extraction, M6 CI evidence aggregation, and dedicated indexing optimization remain pending.
 
 ## Overview
 
@@ -69,7 +69,7 @@ Unsupported category values are rejected with HTTP `422` (never silently mapped 
 - [x] Data ingestion and validation (M2.1–M2.6: canonical models, Vietnamese `name_search` normalization, deterministic 5-category mapping, streaming Pyosmium Node-only extractor with verified source snapshots, technical staging schema `0002`, idempotent issue fingerprinting, `ST_Covers` readiness verification)
 - [x] Transactional publication (M3.1–M3.7: fail-closed eligibility tiers, immutable pre-publication recovery artifacts, trigger guards `0003` & `0004`, guarded atomic `pg_advisory_xact_lock` publication, stable `places.id` UPSERT, scope-aware soft deactivation, bidirectional SQL `EXCEPT` verification, fault-injection, concurrency, and reader isolation tests)
 - [x] Search API (M4.1–M4.6: FastAPI application factory, `/health`, `/api/v1/places`, `/api/v1/places/nearby`, `/api/v1/places/{id}`, Vietnamese search reuse, PostGIS WGS84 spheroid distance, adaptive `READ COMMITTED` / `REPEATABLE READ READ ONLY` snapshot consistency, leak-free error handling, and PostgreSQL/PostGIS HTTP integration & concurrency tests)
-- [ ] Controlled recovery execution & duplicate detection (M5)
+- [x] Controlled recovery execution & duplicate evidence reliability (M5: historical source artifact verification with TOCTOU isolation, traceable `RecoveryApproval`, atomic `RECOVERY` run staging & guarded publication via `execute_controlled_recovery`, retry & unknown COMMIT outcome resolution, fault-injection, concurrent API snapshot tests, and run-scoped duplicate-evidence preservation; automated duplicate-matching thresholds remain pending approval)
 - [ ] Full CI & acceptance evidence aggregation (M6)
 
 ## Local Setup, Running the API & Isolated Testing
@@ -300,7 +300,58 @@ All non-health API errors return a consistent JSON envelope without exposing SQL
   - Way and Relation geometry extraction (requires node-location caching / polygon centroid or representative-point design).
   - Authoritative post-2025 Ho Chi Minh City boundary polygon (including former Binh Duong, former Ba Ria–Vung Tau, and Con Dao) and independently verified geographic reference fixtures.
   - Approved Vietnamese address formatting rules (M2 uses a minimal lossless extraction from `addr:full` / present `addr:*` tags while preserving all original tags in `raw_tags`).
-  - Controlled recovery execution, automated duplicate detection (M5), full CI acceptance aggregation (M6), and dedicated indexing optimization.
+  - Automated heuristic duplicate-detection matching thresholds and recovery duplicate-copying policy (awaiting formal business-rule approval; M3/M5 enforce canonical pair ordering, per-run uniqueness, immutability, historical retention, and no auto-merge).
+  - Full CI acceptance aggregation (M6) and dedicated indexing optimization.
+
+## Controlled Recovery Procedure (M5 — Operator Reference)
+
+Controlled recovery restores a previously published canonical dataset (e.g., `V1`) while a newer publication (e.g., `V2`) is active, without `TRUNCATE`, hard POI deletion, historical rewrites, or database resets. The public Search API remains strictly read-only.
+
+### 1. Internal Operator Entry Points
+
+Module: `geosearch.publication` (`src/geosearch/publication/recovery.py`)
+
+- `verify_historical_source_artifact(conn, artifact_dir=..., publication_mode=...)` — read-only verification of a historical artifact's manifest, format version (`geosearch.recovery_artifact.v1`), SHA-256 digests, canonical JSONL records, M2 `name_search` parity, PostGIS EWKB & `ST_Covers` parity, historical `import_runs` provenance (`PUBLISHED` or `SUPERSEDED`), `APPROVED` boundary provenance + geometry EWKB hash, and existing stable `places.id` integrity.
+- `build_recovery_approval_from_artifact(source_artifact, publication_operation_id=..., expected_active_run_id=..., approved_by=..., approval_reason=...)` — creates a typed `RecoveryApproval` bound cryptographically to the verified artifact, operation UUID, and expected active run.
+- `prepare_recovery_run(engine, source_artifact_dir=..., publication_operation_id=..., approval=..., publication_mode=...)` — copies the source artifact to an isolated read-only snapshot, verifies it (and confirms the source directory on disk did not change before staging), and atomically creates (or idempotently resumes) a `PREPARED` `RECOVERY` run bound to `publication_operation_id`.
+- `execute_controlled_recovery(engine, source_artifact_dir=..., publication_operation_id=..., approval=..., publication_mode=..., protection_artifact_dir=... | protection_artifact_root=...)` — end-to-end internal entry point combining `prepare_recovery_run` and M3's guarded `publish_prepared_run`.
+
+### 2. Distinguishing the Two Artifact Roles
+
+Every replacement recovery explicitly separates two artifacts:
+
+| Role | Parameter | Purpose & Verification |
+|---|---|---|
+| **V1 Source Artifact** | `source_artifact_dir` | Historical immutable artifact supplying canonical content and membership to restore. Its source `import_runs` row may be `SUPERSEDED`. Verified against historical `import_runs` + `boundary_versions` provenance and preserved untouched on disk. |
+| **V2 Protection Artifact** | `protection_artifact_dir` or `protection_artifact_root` | Pre-publication protection snapshot of the **currently active** run (`V2`) captured/verified via M3's `prepare_recovery_artifact` / `verify_artifact_matches_live_baseline` under `pg_advisory_xact_lock` before replacing `V2`. |
+
+Supplying the V1 source artifact as the V2 protection artifact is rejected fail-closed.
+
+### 3. Recording Manual Approval & Trust Assumptions
+
+- Every recovery requires a `RecoveryApproval` containing non-blank `approved_by`, timezone-aware `approved_at`, non-blank `approval_reason`, exact `publication_operation_id`, `source_import_run_id`, `source_artifact_manifest_sha256`, `source_artifact_content_sha256`, and `expected_active_run_id`.
+- Approval metadata and source provenance are persisted durably in `staging_run_checkpoints.readiness_evidence["recovery"]` (frozen at `PREPARED` by `0004` triggers) and atomically copied into `import_runs.publication_evidence["recovery"]` at `PUBLISHED` (preserved across `SUPERSEDED`).
+- `expected_active_run_id` is checked at preflight and re-checked under PostgreSQL `pg_advisory_xact_lock`; if another publication changed the active run in the meantime, the stale recovery is rejected with `PublicationConflictError`.
+- **Trust assumption**: No separate approval table or reviewer authentication service is introduced under the approved 5-table schema. Human reviewer identity verification and authorization for `approved_by` are external to this internal Python library entry point.
+
+- **Duplicate evidence during recovery (approved Option A)**: V1 and V2 `duplicate_candidates` remain on their original historical `import_run_id` rows (even after supersession or POI deactivation). By default, when detection did not run and no candidates are supplied, the new `RECOVERY` run records `duplicate_detection_state = NOT_EXECUTED` (`resolved_pair_count = 0`) without copying historical pairs into the new run or falsely reporting `VERIFIED_EMPTY`. Distinct OSM identities always remain separate canonical POIs (never auto-merged). Automated heuristic duplicate matching remains deferred pending approved distance, name-matching, and scoring rules.
+
+### 4. Retries & Resolving an Unknown COMMIT Outcome
+
+1. **Never generate a fresh `publication_operation_id` after an ambiguous failure or dropped connection.**
+2. Inspect durable PostgreSQL evidence first:
+   ```python
+   from geosearch.publication import resolve_unknown_commit_outcome
+
+   evidence = resolve_unknown_commit_outcome(
+       engine,
+       publication_operation_id=op_uuid,
+   )
+   ```
+   - If `evidence is not None and evidence.is_committed_publication` (`status IN ('PUBLISHED', 'SUPERSEDED')` and `published_at IS NOT NULL`): the recovery **already committed**. Do not re-run with a new UUID.
+   - If `evidence is not None and evidence.status == "PREPARED"`: the recovery preparation committed, but live publication rolled back before COMMIT. Re-invoke `execute_controlled_recovery` with the **exact same** `publication_operation_id`, `source_artifact_dir`, and `approval` to resume that prepared recovery run without creating a duplicate run.
+   - If `evidence is None`: preparation rolled back completely; safe to retry with the same `publication_operation_id`.
+3. Retrying `execute_controlled_recovery` with an already-committed (or subsequently `SUPERSEDED`) `publication_operation_id` returns `PublicationOutcomeStatus.ALREADY_PUBLISHED` without republishing or reactivating a superseded run. Attempting to reuse the UUID with a different artifact or approval raises `PublicationConflictError`.
 
 ## Data Attribution
 

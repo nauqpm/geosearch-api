@@ -264,6 +264,7 @@ def publish_prepared_run(
     duplicate_candidates: DuplicateCandidateInput | None = None,
     upsert_batch_size: int = 500,
     fault_hooks: PublicationFaultHooks | None = None,
+    additional_publication_evidence: dict[str, Any] | None = None,
 ) -> PublicationResult:
     """Atomically publish a verified PREPARED staging run into the live `places` table."""
     hooks = fault_hooks or PublicationFaultHooks()
@@ -552,6 +553,41 @@ def publish_prepared_run(
                     verified_artifact.to_evidence_dict() if verified_artifact is not None else None
                 ),
             }
+            if additional_publication_evidence is not None:
+                if not isinstance(additional_publication_evidence, dict):
+                    raise PublicationEligibilityError(
+                        "additional_publication_evidence must be a dictionary.",
+                        status=EligibilityStatus.OTHER_BLOCKING_FAILURE,
+                        reasons=("additional_publication_evidence must be a JSON object.",),
+                    )
+                collisions = sorted(
+                    set(additional_publication_evidence.keys()) & set(publication_evidence.keys())
+                )
+                if collisions:
+                    raise PublicationEligibilityError(
+                        "additional_publication_evidence collides with reserved keys: "
+                        f"{collisions!r}.",
+                        status=EligibilityStatus.OTHER_BLOCKING_FAILURE,
+                        reasons=(f"Reserved publication_evidence key collision: {collisions!r}.",),
+                    )
+                publication_evidence.update(additional_publication_evidence)
+            else:
+                # For direct publish_prepared_run calls on RECOVERY runs, carry forward durable
+                # recovery provenance & approval metadata recorded in readiness_evidence.
+                recovery_meta = conn.execute(
+                    text(
+                        """
+                        SELECT cp.readiness_evidence -> 'recovery' AS rec_meta
+                        FROM import_runs r
+                        JOIN staging_run_checkpoints cp ON cp.import_run_id = r.id
+                        WHERE r.id = :run_id
+                          AND r.run_type = 'RECOVERY'
+                        """
+                    ),
+                    {"run_id": import_run_id},
+                ).scalar_one_or_none()
+                if isinstance(recovery_meta, dict):
+                    publication_evidence["recovery"] = recovery_meta
 
             if previous_active_run_id is not None:
                 supersession_meta = {

@@ -803,6 +803,93 @@ def validate_publication_eligibility(
     if staging_errors:
         return _reject(EligibilityStatus.INVALID_STAGING, staging_errors)
 
+    # 6b. Defense-in-depth for RECOVERY runs: require durable manual approval and source provenance.
+    if str(run_row.run_type) == "RECOVERY":
+        recovery_meta = (
+            readiness_evidence.get("recovery")
+            if isinstance(readiness_evidence, dict)
+            else None
+        )
+        if not isinstance(recovery_meta, dict):
+            return _reject(
+                EligibilityStatus.SOURCE_PROVENANCE_MISMATCH,
+                ["RECOVERY run is missing durable readiness_evidence.recovery metadata."],
+            )
+        rec_approval = recovery_meta.get("approval")
+        rec_source_art = recovery_meta.get("source_artifact")
+        if not isinstance(rec_approval, dict) or not isinstance(rec_source_art, dict):
+            return _reject(
+                EligibilityStatus.SOURCE_PROVENANCE_MISMATCH,
+                [
+                    "RECOVERY run readiness_evidence.recovery must contain both 'approval' "
+                    "and 'source_artifact' objects."
+                ],
+            )
+        rec_errors: list[str] = []
+        if not isinstance(rec_approval.get("approved_by"), str) or not str(
+            rec_approval.get("approved_by")
+        ).strip():
+            rec_errors.append("RECOVERY approval is missing non-blank approved_by.")
+        if not isinstance(rec_approval.get("approval_reason"), str) or not str(
+            rec_approval.get("approval_reason")
+        ).strip():
+            rec_errors.append("RECOVERY approval is missing non-blank approval_reason.")
+        if not isinstance(rec_approval.get("approved_at"), str) or not str(
+            rec_approval.get("approved_at")
+        ).strip():
+            rec_errors.append("RECOVERY approval is missing approved_at.")
+        if str(rec_approval.get("publication_operation_id")) != str(op_uuid):
+            rec_errors.append(
+                "RECOVERY approval publication_operation_id does not match incoming operation UUID."
+            )
+        if SHA256_RE.fullmatch(str(rec_approval.get("source_artifact_manifest_sha256", ""))) is None:
+            rec_errors.append("RECOVERY approval source_artifact_manifest_sha256 is invalid.")
+        if SHA256_RE.fullmatch(str(rec_approval.get("source_artifact_content_sha256", ""))) is None:
+            rec_errors.append("RECOVERY approval source_artifact_content_sha256 is invalid.")
+        if rec_errors:
+            return _reject(EligibilityStatus.SOURCE_PROVENANCE_MISMATCH, rec_errors)
+
+        approval_expected_active = rec_approval.get("expected_active_run_id")
+        if approval_expected_active is not None:
+            approval_expected_active = int(approval_expected_active)
+        if current_active_run_id != approval_expected_active:
+            return _reject(
+                EligibilityStatus.PUBLICATION_CONFLICT,
+                [
+                    f"RECOVERY approval expected_active_run_id={approval_expected_active!r} does "
+                    f"not match current active run {current_active_run_id!r}."
+                ],
+            )
+
+        src_run_id = rec_source_art.get("source_import_run_id")
+        if isinstance(src_run_id, bool) or not isinstance(src_run_id, int) or src_run_id <= 0:
+            return _reject(
+                EligibilityStatus.SOURCE_PROVENANCE_MISMATCH,
+                ["RECOVERY source_artifact.source_import_run_id is missing or invalid."],
+            )
+        src_run_row = conn.execute(
+            text(
+                """
+                SELECT id, status, published_at
+                FROM import_runs
+                WHERE id = :src_run_id
+                """
+            ),
+            {"src_run_id": int(src_run_id)},
+        ).one_or_none()
+        if (
+            src_run_row is None
+            or src_run_row.status not in ("PUBLISHED", "SUPERSEDED")
+            or src_run_row.published_at is None
+        ):
+            return _reject(
+                EligibilityStatus.SOURCE_PROVENANCE_MISMATCH,
+                [
+                    f"RECOVERY source ImportRun id={src_run_id} is missing or not a committed "
+                    "historical publication."
+                ],
+            )
+
     row_prov_errors, row_staging_errors = _verify_staged_rows_integrity(
         conn,
         import_run_id=import_run_id,
