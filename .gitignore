@@ -226,3 +226,6 @@ __marimo__/
 *.osm.pbf
 *.osm.bz2
 
+# Generated local acceptance evidence bundles and JUnit reports
+/artifacts/
+

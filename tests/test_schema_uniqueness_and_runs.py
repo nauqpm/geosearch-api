@@ -33,6 +33,19 @@ def test_duplicate_osm_identity_rejected(migrated_conn: Connection) -> None:
     assert_pg_error(exc_info, sqlstate="23505", constraint_name="uq_places_osm_identity")
 
 
+def test_duplicate_boundary_version_code_rejected(migrated_conn: Connection) -> None:
+    """Duplicate version_code in boundary_versions is rejected by uq_boundary_versions_version_code."""
+    insert_boundary_version(migrated_conn, version_code="dup-bv-code-v1")
+    with pytest.raises(IntegrityError) as exc_info:
+        with migrated_conn.begin_nested():
+            insert_boundary_version(migrated_conn, version_code="dup-bv-code-v1")
+    assert_pg_error(
+        exc_info,
+        sqlstate="23505",
+        constraint_name="uq_boundary_versions_version_code",
+    )
+
+
 def test_same_osm_id_with_different_osm_types_permitted(migrated_conn: Connection) -> None:
     """Same numeric osm_id across node, way, and relation is permitted as distinct identities."""
     bv_id = insert_boundary_version(migrated_conn)

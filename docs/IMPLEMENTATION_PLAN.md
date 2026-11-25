@@ -1,6 +1,6 @@
 # GeoSearch API — Implementation Plan
 
-Status: IN PROGRESS (M1–M4 closed on synthetic fixtures; M5 controlled recovery & reliability implemented and verified on synthetic fixtures, pending M5 sign-off review before M6)
+Status: IN PROGRESS (M1–M5 implemented and committed through `2aefa17`; M6 CI, Acceptance Registry, G1–G6 migration gates, and evidence aggregation implemented for synthetic PostgreSQL 16 / PostGIS 3.4 scope, awaiting explicit project-owner sign-off and remote GitHub Actions CI run)
 
 ## Working Principles
 
@@ -128,17 +128,18 @@ Acceptance:
 ## M6 — CI & Final Acceptance
 
 Deliverables:
-- S1–S5 test suites
-- G1–G6 migration gates
-- Acceptance Registry
-- Evidence aggregation
-- Deterministic concurrency tests
-- Final acceptance report
+- Versioned machine-readable Acceptance Registry (`docs/acceptance/acceptance_registry.json`) preserving approved policy scope accounting (`18 + 26 + 28 + 15 = 87` memberships plus mandatory column/JSONB, spatial/API, and explicitly tracked deferred/out-of-scope items) — completed (M6.1)
+- Canonical S1–S5 suite classification (`src/geosearch/acceptance/suites.py`, `pyproject.toml` markers, deterministic `tests/conftest.py` assignment) covering 100% of repository tests with reproducible `pytest -m s1..s5` selectors — completed (M6.1)
+- Executable G1–G6 migration gate verification (`src/geosearch/acceptance/migration_gates.py`, expanded G4 historical `0001 -> head` and G5 Alembic failure tests in `tests/test_migrations.py`, duplicate `boundary_versions.version_code` negative test in `tests/test_schema_uniqueness_and_runs.py`) — completed (M6.2)
+- Automated GitHub Actions CI workflow (`.github/workflows/ci-acceptance.yml`) running S1–S5 and G1–G6 on `pull_request` and `push` to `main` using Python 3.12 and `postgis/postgis:16-3.4` without `continue-on-error`, retaining evidence on failure and preserving per-attempt artifacts — completed (M6.2)
+- Unified evidence aggregation, policy evaluation engine, secret-leak guard, append-only attempt history, and Markdown acceptance report renderer (`src/geosearch/acceptance/evaluator.py`, `reporter.py`, `cli.py`) plus focused M6 evaluation tests (`tests/test_m6_acceptance.py`) — completed (M6.3)
 
 Acceptance:
-- All blocking requirements are technically verified
-- Test evidence is tied to the correct commit and environment
-- Explicit sign-off is completed
+- All blocking requirements for `SYNTHETIC_MVP_VERIFICATION` are technically verified on isolated PostgreSQL 16 / PostGIS 3.4 via `python -m geosearch.acceptance run-local` (producing `artifacts/acceptance/evidence_bundle.json` and `artifacts/acceptance/acceptance_report.md`)
+- Test and migration evidence is bound to the exact reviewed commit SHA, governance checksums, and database/PostGIS/Alembic versions
+- Remote GitHub Actions CI execution remains pending until changes are pushed / PR opened
+- Explicit project-owner sign-off remains pending (`formal_sign_off_status = PENDING_EXPLICIT_SIGN_OFF`; `IMPLEMENTATION_ACCEPTED` not self-assigned)
+- Discrepancy note: prior plan text listed M5 as awaiting formal sign-off; the project owner locally verified M1–M5 (473 passed, 1 Starlette TestClient warning in 149.54s), committed M5 at `2aefa1747fadde707690e718b0d8888887b38c7f`, and explicitly authorized M6 implementation. Authoritative post-2025 HCMC boundary/geographic fixtures, OSM Way/Relation extraction, automated heuristic duplicate matching, indexing optimization, and production deployment remain outside the synthetic M6 acceptance scope.
 
 ## Milestone Completion Report
 
@@ -154,6 +155,4 @@ Each completed task must report:
 
 ## Current Task
 
-M5 — Recovery & Reliability (implemented and technically verified on isolated synthetic PostgreSQL 16 / PostGIS 3.4 fixtures with approved Option 2 / Option A duplicate scope; awaiting M5 sign-off review before M6).
-
-Do not implement M6 until M5 is reviewed and M6 is explicitly assigned.
+M6 — CI & Final Acceptance (implemented and locally verified on isolated synthetic PostgreSQL 16 / PostGIS 3.4; awaiting commit/push for remote GitHub Actions CI verification and explicit project-owner sign-off for `IMPLEMENTATION_ACCEPTED`).

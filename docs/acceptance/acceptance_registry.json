@@ -1,0 +1,1773 @@
+{
+  "registry_schema_version": "1.0.0",
+  "registry_version": "2026-11-25.m6.1",
+  "project": "geosearch-api",
+  "declared_scope": "SYNTHETIC_MVP_VERIFICATION",
+  "declared_scope_description": "Technical acceptance verification for M1-M6 on controlled synthetic OSM node_only fixtures and synthetic approved boundaries using real PostgreSQL 16 / PostGIS 3.4 and Alembic revision 0004_m3_staging_immutability. Authoritative post-2025 Ho Chi Minh City publication remains explicitly outside this scope.",
+  "expected_alembic_head": "0004_m3_staging_immutability",
+  "approved_sources": [
+    "docs/ARCHITECTURE_BASELINE.md",
+    "docs/ACCEPTANCE_POLICY.md",
+    "docs/IMPLEMENTATION_PLAN.md",
+    "README.md"
+  ],
+  "tracked_fixtures": [
+    {
+      "fixture_id": "synthetic_nodes_xml_v1",
+      "path": "tests/fixtures/sample_synthetic_nodes.osm",
+      "scope": "SYNTHETIC_CONTROLLED",
+      "authoritative": false,
+      "description": "Controlled M2 synthetic OSM XML fixture covering all 5 approved categories, unnamed/named ATMs, unsupported tags, invalid/ambiguous nodes, and ignored Way element."
+    }
+  ],
+  "source_traceability_notes": [
+    "docs/ACCEPTANCE_POLICY.md §2 defines exact approved scenario membership counts across four core scopes (Fault Injection & Recovery: 18, Unique Constraints & Idempotency: 26, Cross-table Integrity & Recovery: 28, Migration & Schema: 15; combined total = 87) and mandates additional coverage for column validation, JSONB, spatial correctness, and independently verified geographic fixtures.",
+    "Gap recorded per policy: the upstream design prose listing individual scenario titles for the 87 memberships is summarized in docs/ACCEPTANCE_POLICY.md rather than committed verbatim in this repository. Every scenario in this registry is therefore grounded strictly in approved requirements from docs/ARCHITECTURE_BASELINE.md, docs/ACCEPTANCE_POLICY.md, docs/IMPLEMENTATION_PLAN.md, and README.md, and mapped only to tests/gates whose actual assertions prove the expected outcome.",
+    "Documentation discrepancy noted: docs/IMPLEMENTATION_PLAN.md and docs/ACCEPTANCE_POLICY.md pre-M6 still displayed M5 awaiting sign-off / implementation verification NOT STARTED, whereas M5 was committed at 2aefa1747fadde707690e718b0d8888887b38c7f after the project owner confirmed 473 passed (1 Starlette TestClient deprecation warning) and authorized M6. Formal IMPLEMENTATION_ACCEPTED sign-off remains reserved for explicit project-owner review."
+  ],
+  "approved_scope_accounting": {
+    "fault_injection_and_recovery": 18,
+    "unique_constraints_and_idempotency": 26,
+    "cross_table_integrity_and_recovery": 28,
+    "migration_and_schema": 15,
+    "combined_policy_memberships": 87
+  },
+  "applicability_rules": [
+    {
+      "rule_id": "G6_POPULATED_DESTRUCTIVE_DOWNGRADE",
+      "approved_source": "docs/ACCEPTANCE_POLICY.md §5 & §6; alembic/versions/20261123_0001_m1_initial_schema.py; alembic/versions/20261123_0002_m2_staging_tables.py",
+      "description": "Downgrading 0001_m1_initial_schema -> base or 0002_m2_staging_tables -> 0001_m1_initial_schema on populated tables is intentionally non-reversible and fails closed with RuntimeError to prevent silent destruction of canonical POI/audit or staging data. Approved recovery/roll-forward alternative: roll-forward Alembic migration or M5 controlled recovery from an immutable verified recovery artifact."
+    }
+  ],
+  "suites": [
+    {
+      "suite_id": "S1",
+      "marker": "s1",
+      "name": "S1 — Unit",
+      "coverage": "Pure Python rules, normalization, validation, classification, guards, and acceptance evaluation",
+      "requires_database": false,
+      "command": "pytest -m s1 -v",
+      "junit_file": "junit/s1_unit.xml"
+    },
+    {
+      "suite_id": "S2",
+      "marker": "s2",
+      "name": "S2 — Database Integration",
+      "coverage": "Real PostgreSQL/PostGIS constraints, staging integration, spatial queries, and API query endpoints",
+      "requires_database": true,
+      "command": "pytest -m s2 -v",
+      "junit_file": "junit/s2_db_integration.xml"
+    },
+    {
+      "suite_id": "S3",
+      "marker": "s3",
+      "name": "S3 — Migration",
+      "coverage": "Alembic G1-G6 migration lifecycle, catalog contract, drift, and PostGIS reflection checks",
+      "requires_database": true,
+      "command": "pytest -m s3 -v",
+      "junit_file": "junit/s3_migration.xml"
+    },
+    {
+      "suite_id": "S4",
+      "marker": "s4",
+      "name": "S4 — Workflow",
+      "coverage": "Publication, controlled recovery, durable evidence, history, and duplicate-candidate workflows",
+      "requires_database": true,
+      "command": "pytest -m s4 -v",
+      "junit_file": "junit/s4_workflow.xml"
+    },
+    {
+      "suite_id": "S5",
+      "marker": "s5",
+      "name": "S5 — Race & Fault Injection",
+      "coverage": "Independent connections, deterministic checkpoints, rollback, concurrency, and reader snapshot isolation",
+      "requires_database": true,
+      "command": "pytest -m s5 -v",
+      "junit_file": "junit/s5_race_fault.xml"
+    }
+  ],
+  "migration_gates": [
+    {
+      "gate_id": "G1",
+      "name": "G1 — Clean Upgrade",
+      "approved_source": "docs/ACCEPTANCE_POLICY.md §5",
+      "required_check": "Upgrade a fresh disposable PostgreSQL/PostGIS database to Alembic head, verify idempotent re-upgrade and exact applied revision."
+    },
+    {
+      "gate_id": "G2",
+      "name": "G2 — Schema Contract Verification",
+      "approved_source": "docs/ACCEPTANCE_POLICY.md §5; docs/ARCHITECTURE_BASELINE.md §6-§13",
+      "required_check": "Compare live PostgreSQL catalog tables, spatial column types, validated constraints (convalidated=true), ON DELETE RESTRICT foreign keys, and M3/M3.7 guard triggers against approved contract."
+    },
+    {
+      "gate_id": "G3",
+      "name": "G3 — Schema Drift Detection",
+      "approved_source": "docs/ACCEPTANCE_POLICY.md §5",
+      "required_check": "Verify zero Alembic/SQLAlchemy drift on cleanly upgraded database and confirm deliberate out-of-band DDL and spatial SRID drift are detected."
+    },
+    {
+      "gate_id": "G4",
+      "name": "G4 — Existing-data Compatibility",
+      "approved_source": "docs/ACCEPTANCE_POLICY.md §5",
+      "required_check": "Upgrade from earlier revision 0001_m1_initial_schema to head with representative historical data; verify valid rows survive intact and incompatible existing rows fail stricter constraints cleanly without silent repair."
+    },
+    {
+      "gate_id": "G5",
+      "name": "G5 — Migration Failure Safety",
+      "approved_source": "docs/ACCEPTANCE_POLICY.md §5",
+      "required_check": "Verify failed Alembic upgrade and failed transactional DDL report failure accurately, roll back atomically, and leave alembic_version and database state uncorrupted."
+    },
+    {
+      "gate_id": "G6",
+      "name": "G6 — Conditional Downgrade/Re-upgrade",
+      "approved_source": "docs/ACCEPTANCE_POLICY.md §5",
+      "required_check": "Verify clean downgrade and re-upgrade on empty DB and non-destructive trigger migrations, verify fail-closed refusal on populated 0001/0002 tables, and record approved roll-forward/recovery alternative."
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "ACC-FI-01",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §11; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["fault_injection_and_recovery"],
+      "scenario": "Pre-COMMIT publication fault at checkpoint 1 (on_before_lock) rolls back atomically, preserves active V1, and allows idempotent retry with the same UUID.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S5",
+      "test_nodes": [
+        "tests/test_m3_fault_injection_and_concurrency.py::test_m35_fault_injection_pre_commit_checkpoints_roll_back_atomically_and_allow_retry[1_before_lock]"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S5", "fault_injection_checkpoints"]
+    },
+    {
+      "case_id": "ACC-FI-02",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §11; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["fault_injection_and_recovery"],
+      "scenario": "Pre-COMMIT publication fault at checkpoint 2 (on_after_lock) rolls back atomically, preserves active V1, and allows idempotent retry with the same UUID.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S5",
+      "test_nodes": [
+        "tests/test_m3_fault_injection_and_concurrency.py::test_m35_fault_injection_pre_commit_checkpoints_roll_back_atomically_and_allow_retry[2_after_lock]"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S5", "fault_injection_checkpoints"]
+    },
+    {
+      "case_id": "ACC-FI-03",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §11; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["fault_injection_and_recovery"],
+      "scenario": "Pre-COMMIT publication fault at checkpoint 3 (on_after_revalidation) rolls back atomically, preserves active V1, and allows idempotent retry with the same UUID.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S5",
+      "test_nodes": [
+        "tests/test_m3_fault_injection_and_concurrency.py::test_m35_fault_injection_pre_commit_checkpoints_roll_back_atomically_and_allow_retry[3_after_revalidation]"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S5", "fault_injection_checkpoints"]
+    },
+    {
+      "case_id": "ACC-FI-04",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §11; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["fault_injection_and_recovery"],
+      "scenario": "Pre-COMMIT publication fault at checkpoint 4 (on_before_upsert) rolls back atomically, preserves active V1, and allows idempotent retry with the same UUID.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S5",
+      "test_nodes": [
+        "tests/test_m3_fault_injection_and_concurrency.py::test_m35_fault_injection_pre_commit_checkpoints_roll_back_atomically_and_allow_retry[4_before_upsert]"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S5", "fault_injection_checkpoints"]
+    },
+    {
+      "case_id": "ACC-FI-05",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §11; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["fault_injection_and_recovery"],
+      "scenario": "Pre-COMMIT publication fault at checkpoint 5 (on_during_upsert mid-batch) rolls back partial UPSERT writes atomically and allows idempotent retry.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S5",
+      "test_nodes": [
+        "tests/test_m3_fault_injection_and_concurrency.py::test_m35_fault_injection_pre_commit_checkpoints_roll_back_atomically_and_allow_retry[5_during_upsert]"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S5", "fault_injection_checkpoints"]
+    },
+    {
+      "case_id": "ACC-FI-06",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §11; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["fault_injection_and_recovery"],
+      "scenario": "Pre-COMMIT publication fault at checkpoint 6 (on_after_upsert) rolls back atomically, preserves active V1, and allows idempotent retry.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S5",
+      "test_nodes": [
+        "tests/test_m3_fault_injection_and_concurrency.py::test_m35_fault_injection_pre_commit_checkpoints_roll_back_atomically_and_allow_retry[6_after_upsert]"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S5", "fault_injection_checkpoints"]
+    },
+    {
+      "case_id": "ACC-FI-07",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §11-§12; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["fault_injection_and_recovery"],
+      "scenario": "Pre-COMMIT publication fault at checkpoint 7 (on_during_reconciliation) rolls back atomically, preserves active V1, and allows idempotent retry.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S5",
+      "test_nodes": [
+        "tests/test_m3_fault_injection_and_concurrency.py::test_m35_fault_injection_pre_commit_checkpoints_roll_back_atomically_and_allow_retry[7_during_reconciliation]"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S5", "fault_injection_checkpoints"]
+    },
+    {
+      "case_id": "ACC-FI-08",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §11-§12; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["fault_injection_and_recovery"],
+      "scenario": "Pre-COMMIT publication fault at checkpoint 8 (on_after_deactivation) rolls back soft-deactivations atomically and preserves active V1.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S5",
+      "test_nodes": [
+        "tests/test_m3_fault_injection_and_concurrency.py::test_m35_fault_injection_pre_commit_checkpoints_roll_back_atomically_and_allow_retry[8_after_deactivation]"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S5", "fault_injection_checkpoints"]
+    },
+    {
+      "case_id": "ACC-FI-09",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §11 & §13; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["fault_injection_and_recovery"],
+      "scenario": "Pre-COMMIT publication fault at checkpoint 9 (on_during_duplicate_resolution) rolls back duplicate inserts and live mutations atomically.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S5",
+      "test_nodes": [
+        "tests/test_m3_fault_injection_and_concurrency.py::test_m35_fault_injection_pre_commit_checkpoints_roll_back_atomically_and_allow_retry[9_during_duplicate_resolution]"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S5", "fault_injection_checkpoints"]
+    },
+    {
+      "case_id": "ACC-FI-10",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §11-§12; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["fault_injection_and_recovery"],
+      "scenario": "Pre-COMMIT publication fault at checkpoint 10 (on_during_pre_commit_verification) rolls back atomically and preserves active V1.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S5",
+      "test_nodes": [
+        "tests/test_m3_fault_injection_and_concurrency.py::test_m35_fault_injection_pre_commit_checkpoints_roll_back_atomically_and_allow_retry[10_during_pre_commit_verification]"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S5", "fault_injection_checkpoints"]
+    },
+    {
+      "case_id": "ACC-FI-11",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §11; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["fault_injection_and_recovery"],
+      "scenario": "Pre-COMMIT publication fault at checkpoint 11 (on_during_active_slot_switch) rolls back active-slot switch atomically and preserves V1.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S5",
+      "test_nodes": [
+        "tests/test_m3_fault_injection_and_concurrency.py::test_m35_fault_injection_pre_commit_checkpoints_roll_back_atomically_and_allow_retry[11_during_active_slot_switch]"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S5", "fault_injection_checkpoints"]
+    },
+    {
+      "case_id": "ACC-FI-12",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §11; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["fault_injection_and_recovery"],
+      "scenario": "Pre-COMMIT publication fault at checkpoint 12 (on_before_commit) rolls back all live writes atomically and allows safe retry.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S5",
+      "test_nodes": [
+        "tests/test_m3_fault_injection_and_concurrency.py::test_m35_fault_injection_pre_commit_checkpoints_roll_back_atomically_and_allow_retry[12_before_commit]"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S5", "fault_injection_checkpoints"]
+    },
+    {
+      "case_id": "ACC-FI-13",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §11; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["fault_injection_and_recovery"],
+      "scenario": "Post-COMMIT lost ACK fault at checkpoint 13 (on_after_commit_before_ack) keeps committed V2 durable; durable evidence inspection + retry returns ALREADY_PUBLISHED without re-applying.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S5",
+      "test_nodes": [
+        "tests/test_m3_fault_injection_and_concurrency.py::test_m35_fault_injection_checkpoint_13_after_commit_before_ack"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S5", "fault_injection_checkpoints"]
+    },
+    {
+      "case_id": "ACC-FI-14",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §10-§11; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["fault_injection_and_recovery"],
+      "scenario": "Lost COMMIT ACK followed by V3 supersession: retrying V2 with original operation UUID returns ALREADY_PUBLISHED without reactivating superseded V2.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S5",
+      "test_nodes": [
+        "tests/test_m37_remediation.py::test_section5_lost_commit_ack_followed_by_v3_supersession_returns_already_published"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S5", "fault_injection_checkpoints"]
+    },
+    {
+      "case_id": "ACC-FI-15",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §8 & §12; docs/IMPLEMENTATION_PLAN.md M2",
+      "scope_memberships": ["fault_injection_and_recovery"],
+      "scenario": "Mid-run staging batch failure, corrupt OSM stream, and mid-stream truncated XML roll back failed batches atomically and block PREPARED readiness.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S5",
+      "test_nodes": [
+        "tests/test_m2_staging.py::test_failed_staging_transaction_rolls_back_cleanly_on_real_commit",
+        "tests/test_m2_pipeline_integration.py::test_e2e_failed_batch_leaves_no_partial_batch_writes_and_fails_readiness",
+        "tests/test_m2_pipeline_integration.py::test_e2e_corrupt_source_file_marks_run_failed_with_source_integrity_issue",
+        "tests/test_m2_remediation.py::test_blocker2_midstream_truncated_xml_fails_safely_and_blocks_partial_batches"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S5", "fault_injection_checkpoints"]
+    },
+    {
+      "case_id": "ACC-FI-16",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §14; docs/IMPLEMENTATION_PLAN.md M5",
+      "scope_memberships": ["fault_injection_and_recovery"],
+      "scenario": "Controlled recovery pre-COMMIT fault injection across all 14 preparation and publication checkpoints rolls back cleanly and leaves active V2 intact.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S5",
+      "test_nodes": [
+        "tests/test_m5_faults_concurrency_and_duplicates.py::test_m5_ac4_pre_commit_fault_injection_rolls_back_cleanly"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S5", "fault_injection_checkpoints", "recovery_verification"]
+    },
+    {
+      "case_id": "ACC-FI-17",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §11 & §14; docs/IMPLEMENTATION_PLAN.md M5",
+      "scope_memberships": ["fault_injection_and_recovery"],
+      "scenario": "Controlled recovery lost COMMIT ACK resolves via durable operation evidence; retry after completion or subsequent supersession returns ALREADY_PUBLISHED without re-applying.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S4",
+      "test_nodes": [
+        "tests/test_m5_recovery_e2e_and_history.py::test_m5_ac3_recovery_retry_anti_repurposing_lost_commit_ack_and_retry_after_supersession"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S4", "recovery_verification"]
+    },
+    {
+      "case_id": "ACC-FI-18",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §3 & §15; README.md Error Responses",
+      "scope_memberships": ["fault_injection_and_recovery"],
+      "scenario": "API gracefully degrades under database unavailability (503), bounded statement timeout (504), and unexpected failures (500) without leaking credentials, SQL, or connection pool leases.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S5",
+      "test_nodes": [
+        "tests/test_m4_api_consistency.py::test_m44_database_unavailability_timeout_unexpected_error_and_pool_cleanup",
+        "tests/test_m4_health.py::test_m41_health_endpoint_returns_503_without_leaking_credentials"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S5", "junit:S2"]
+    },
+    {
+      "case_id": "ACC-UQ-01",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §7; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["unique_constraints_and_idempotency"],
+      "scenario": "places enforces UNIQUE(osm_type, osm_id) and rejects duplicate OSM identities with SQLSTATE 23505.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S2",
+      "test_nodes": [
+        "tests/test_schema_uniqueness_and_runs.py::test_duplicate_osm_identity_rejected"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S2"]
+    },
+    {
+      "case_id": "ACC-UQ-02",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §7; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["unique_constraints_and_idempotency"],
+      "scenario": "places allows identical numeric osm_id values across distinct osm_type values (node, way, relation).",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S2",
+      "test_nodes": [
+        "tests/test_schema_uniqueness_and_runs.py::test_same_osm_id_with_different_osm_types_permitted",
+        "tests/test_m2_validation.py::test_valid_osm_identities_and_distinct_types"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S2", "junit:S1"]
+    },
+    {
+      "case_id": "ACC-UQ-03",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §7 & §11; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["unique_constraints_and_idempotency"],
+      "scenario": "places.id remains stable across UPSERT updates, soft-deactivation, and subsequent reactivation in V1 -> V2 -> V3 publications.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S4",
+      "test_nodes": [
+        "tests/test_m3_publication_e2e.py::test_m33_controlled_v1_v2_v3_reactivation_stable_ids_and_provenance"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S4"]
+    },
+    {
+      "case_id": "ACC-UQ-04",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §7; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["unique_constraints_and_idempotency"],
+      "scenario": "PostgreSQL trigger trg_places_identity_guard blocks mutating places.id, osm_type, osm_id, or created_at on existing rows.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S4",
+      "test_nodes": [
+        "tests/test_m3_eligibility_and_guards.py::test_m3_db_triggers_import_runs_places_and_duplicate_candidates_immutability"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S4"]
+    },
+    {
+      "case_id": "ACC-UQ-05",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §9; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["unique_constraints_and_idempotency"],
+      "scenario": "boundary_versions enforces unique version_code (uq_boundary_versions_version_code) and rejects duplicates with SQLSTATE 23505.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S2",
+      "test_nodes": [
+        "tests/test_schema_uniqueness_and_runs.py::test_duplicate_boundary_version_code_rejected"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S2"]
+    },
+    {
+      "case_id": "ACC-UQ-06",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §10; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["unique_constraints_and_idempotency"],
+      "scenario": "import_runs does not treat source_fingerprint as unique; re-importing the same source creates distinct independent run IDs.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S2",
+      "test_nodes": [
+        "tests/test_schema_uniqueness_and_runs.py::test_import_runs_allows_reusing_source_fingerprint"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S2"]
+    },
+    {
+      "case_id": "ACC-UQ-07",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §10; docs/IMPLEMENTATION_PLAN.md M2",
+      "scope_memberships": ["unique_constraints_and_idempotency"],
+      "scenario": "Source fingerprints and candidate content digests are deterministic and sensitive to source snapshot, boundary, pipeline, normalizer, and config inputs.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S1",
+      "test_nodes": [
+        "tests/test_m2_staging.py::test_deterministic_source_fingerprint_and_content_digest",
+        "tests/test_m2_pipeline_integration.py::test_e2e_all_five_categories_issues_normalization_and_reproducible_fingerprints"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S1", "junit:S2"]
+    },
+    {
+      "case_id": "ACC-UQ-08",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §10; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["unique_constraints_and_idempotency"],
+      "scenario": "Guarded staging resume rejects mismatched source_fingerprint and refuses reusing an already-published run.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S2",
+      "test_nodes": [
+        "tests/test_m2_staging.py::test_refuses_reusing_published_run_or_mismatched_resume_fingerprint"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S2"]
+    },
+    {
+      "case_id": "ACC-UQ-09",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §10; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["unique_constraints_and_idempotency"],
+      "scenario": "Guarded staging resume rejects mismatched source_checksum_sha256 for an in-progress PROCESSING run.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S2",
+      "test_nodes": [
+        "tests/test_m2_remediation.py::test_resume_rejects_mismatched_source_checksum"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S2"]
+    },
+    {
+      "case_id": "ACC-UQ-10",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §10; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["unique_constraints_and_idempotency"],
+      "scenario": "Staging refuses returning PREPARED, PUBLISHED, SUPERSEDED, FAILED, or ABORTED runs to PROCESSING.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S2",
+      "test_nodes": [
+        "tests/test_m2_remediation.py::test_all_non_stageable_import_run_statuses_rejected"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S2"]
+    },
+    {
+      "case_id": "ACC-UQ-11",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §8; docs/IMPLEMENTATION_PLAN.md M2",
+      "scope_memberships": ["unique_constraints_and_idempotency"],
+      "scenario": "staging_place_candidates enforces unique (import_run_id, osm_type, osm_id) within a run while isolating identical OSM identities across independent runs.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S2",
+      "test_nodes": [
+        "tests/test_m2_staging.py::test_staging_uniqueness_within_run_and_isolation_across_runs"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S2"]
+    },
+    {
+      "case_id": "ACC-UQ-12",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §8 & §10; docs/IMPLEMENTATION_PLAN.md M2",
+      "scope_memberships": ["unique_constraints_and_idempotency"],
+      "scenario": "Staging retry on identical input is idempotent without duplicating rows or inflating counters; conflicting duplicate OSM identity is quarantined without overwriting and blocks readiness.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S2",
+      "test_nodes": [
+        "tests/test_m2_staging.py::test_retry_identical_is_idempotent_and_conflict_is_quarantined_without_overwrite",
+        "tests/test_m2_pipeline_integration.py::test_e2e_retry_identical_input_and_conflicting_duplicate_identity",
+        "tests/test_m2_remediation.py::test_blocker1_retry_after_partial_batch_commit_is_idempotent_and_non_inflating"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S2"]
+    },
+    {
+      "case_id": "ACC-UQ-13",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §8; docs/IMPLEMENTATION_PLAN.md M2.6",
+      "scope_memberships": ["unique_constraints_and_idempotency"],
+      "scenario": "Idempotent staging_issue_fingerprints deduplicates identical nullable-OSM-identity issues on retry without merging distinct malformed occurrences.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S2",
+      "test_nodes": [
+        "tests/test_m2_remediation.py::test_blocker1_nullable_osm_identity_issue_idempotency_and_changed_diagnostics",
+        "tests/test_m2_remediation.py::test_two_identical_malformed_occurrences_not_merged_and_retry_idempotent",
+        "tests/test_m2_remediation.py::test_e2e_pyosmium_two_identical_malformed_negative_id_nodes_and_retry"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S2"]
+    },
+    {
+      "case_id": "ACC-UQ-14",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §10; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["unique_constraints_and_idempotency"],
+      "scenario": "import_runs enforces unique non-null publication_operation_id while permitting multiple NULL rows for unpublished runs.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S2",
+      "test_nodes": [
+        "tests/test_schema_uniqueness_and_runs.py::test_duplicate_publication_operation_uuid_rejected"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S2"]
+    },
+    {
+      "case_id": "ACC-UQ-15",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §10-§11; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["unique_constraints_and_idempotency"],
+      "scenario": "Nil publication UUID is rejected, conflicting UUID ownership across runs is blocked, and registered publication_operation_id is immutable at DB trigger level.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S4",
+      "test_nodes": [
+        "tests/test_m3_eligibility_and_guards.py::test_m31_operation_uuid_ownership_conflict_and_already_published_detection",
+        "tests/test_m3_eligibility_and_guards.py::test_m3_db_triggers_import_runs_places_and_duplicate_candidates_immutability"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S4"]
+    },
+    {
+      "case_id": "ACC-UQ-16",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §11; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["unique_constraints_and_idempotency"],
+      "scenario": "uq_import_runs_active_slot allows zero or one active publication slot (active_slot=1) and rejects a second simultaneous active publication.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S2",
+      "test_nodes": [
+        "tests/test_schema_uniqueness_and_runs.py::test_active_slot_zero_one_and_two_rejected"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S2"]
+    },
+    {
+      "case_id": "ACC-UQ-17",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §11; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["unique_constraints_and_idempotency"],
+      "scenario": "Publication retry handles Cases A (pre-commit retry), B (post-commit idempotent return), C (lost ACK resolution), and D (conflicting UUID rejection) safely.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S4",
+      "test_nodes": [
+        "tests/test_m3_publication_e2e.py::test_m34_idempotent_retry_cases_a_b_c_d"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S4"]
+    },
+    {
+      "case_id": "ACC-UQ-18",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §11 & §14; docs/IMPLEMENTATION_PLAN.md M3.7",
+      "scope_memberships": ["unique_constraints_and_idempotency"],
+      "scenario": "Conflicting operation UUID registration fails before pre-publication recovery artifact export so zero orphan artifacts are written.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S4",
+      "test_nodes": [
+        "tests/test_m37_remediation.py::test_section5_conflicting_registration_does_not_leave_orphan_recovery_artifact"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S4"]
+    },
+    {
+      "case_id": "ACC-UQ-19",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §11; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["unique_constraints_and_idempotency"],
+      "scenario": "Two concurrent workers publishing the same prepared run with the same operation UUID: exactly one commits and the other receives ALREADY_PUBLISHED.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S5",
+      "test_nodes": [
+        "tests/test_m3_fault_injection_and_concurrency.py::test_m35_concurrent_two_workers_same_run_same_uuid_idempotent"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S5"]
+    },
+    {
+      "case_id": "ACC-UQ-20",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §10-§11; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["unique_constraints_and_idempotency"],
+      "scenario": "Two concurrent workers racing with independent operation UUIDs on the same prepared run: one wins registration and the other fails with PublicationConflictError.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S5",
+      "test_nodes": [
+        "tests/test_m3_fault_injection_and_concurrency.py::test_m35_concurrent_registration_race_independent_uuids_same_run"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S5"]
+    },
+    {
+      "case_id": "ACC-UQ-21",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §11; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["unique_constraints_and_idempotency"],
+      "scenario": "Two concurrent workers publishing different runs against the same V1 baseline: winner commits and loser fails closed under advisory lock, preventing stale overwrites.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S5",
+      "test_nodes": [
+        "tests/test_m3_fault_injection_and_concurrency.py::test_m35_concurrent_two_different_runs_same_baseline_prevents_stale_overwrite"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S5"]
+    },
+    {
+      "case_id": "ACC-UQ-22",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §10-§11; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["unique_constraints_and_idempotency"],
+      "scenario": "Two concurrent workers attempting to reuse the same operation UUID on two different prepared runs: only one succeeds and the second is rejected.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S5",
+      "test_nodes": [
+        "tests/test_m3_fault_injection_and_concurrency.py::test_m35_concurrent_duplicate_uuid_across_different_runs_rejected"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S5"]
+    },
+    {
+      "case_id": "ACC-UQ-23",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §13; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["unique_constraints_and_idempotency"],
+      "scenario": "duplicate_candidates enforces canonical pair order (place_a_id < place_b_id), per-run uniqueness UNIQUE(import_run_id, place_a_id, place_b_id), and cross-run coexistence.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S2",
+      "test_nodes": [
+        "tests/test_schema_uniqueness_and_runs.py::test_duplicate_candidates_canonical_order_and_per_run_uniqueness"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S2"]
+    },
+    {
+      "case_id": "ACC-UQ-24",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §13; docs/IMPLEMENTATION_PLAN.md M3 & M5",
+      "scope_memberships": ["unique_constraints_and_idempotency"],
+      "scenario": "Duplicate candidate resolution canonicalizes pairs, is retry-idempotent without overwriting immutable evidence, preserves historical rows across deactivation, and never auto-merges POIs.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S4",
+      "test_nodes": [
+        "tests/test_m3_publication_e2e.py::test_m34_duplicate_candidates_resolution_ordering_coexistence_and_historical_retention",
+        "tests/test_m5_faults_concurrency_and_duplicates.py::test_m5_ac6_duplicate_evidence_preserved_across_supersession_recovery_retry_and_deactivation"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S4"]
+    },
+    {
+      "case_id": "ACC-UQ-25",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §10 & §14; docs/IMPLEMENTATION_PLAN.md M5",
+      "scope_memberships": ["unique_constraints_and_idempotency"],
+      "scenario": "Controlled recovery operation UUID is idempotent on replay, rejects repurposing for a different artifact or approval, and never reactivates a superseded recovery run.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S4",
+      "test_nodes": [
+        "tests/test_m5_recovery_e2e_and_history.py::test_m5_ac3_recovery_retry_anti_repurposing_lost_commit_ack_and_retry_after_supersession"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S4", "recovery_verification"]
+    },
+    {
+      "case_id": "ACC-UQ-26",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §11 & §14; docs/IMPLEMENTATION_PLAN.md M5",
+      "scope_memberships": ["unique_constraints_and_idempotency"],
+      "scenario": "Controlled recovery stale approval expecting V2 is rejected under pg_advisory_xact_lock when concurrent V3 commits first.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S5",
+      "test_nodes": [
+        "tests/test_m5_faults_concurrency_and_duplicates.py::test_m5_ac4_stale_approval_rejected_under_publication_lock_after_concurrent_v3"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S5", "recovery_verification"]
+    },
+    {
+      "case_id": "ACC-XT-01",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §10-§11; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["cross_table_integrity_and_recovery"],
+      "scenario": "import_runs CHECK constraints enforce active_slot=1 iff status=PUBLISHED and require publication_operation_id, published_at, and superseded_at lifecycle consistency.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S2",
+      "test_nodes": [
+        "tests/test_schema_uniqueness_and_runs.py::test_invalid_active_slot_and_publication_lifecycle_rejected"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S2"]
+    },
+    {
+      "case_id": "ACC-XT-02",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §10-§11; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["cross_table_integrity_and_recovery"],
+      "scenario": "Transitioning PUBLISHED -> SUPERSEDED across real COMMIT retains durable publication_operation_id, published_at, superseded_at, and publication_evidence.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S2",
+      "test_nodes": [
+        "tests/test_schema_uniqueness_and_runs.py::test_superseded_publication_evidence_preserved_across_commit"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S2"]
+    },
+    {
+      "case_id": "ACC-XT-03",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §6, §7, §9, §10; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["cross_table_integrity_and_recovery"],
+      "scenario": "Foreign keys use ON DELETE RESTRICT to protect boundary_versions, import_runs, and places from destructive cascading deletes.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S2",
+      "test_nodes": [
+        "tests/test_schema_uniqueness_and_runs.py::test_foreign_keys_restrict_historical_deletes"
+      ],
+      "gates": ["G2"],
+      "required_evidence": ["junit:S2", "schema_verification"]
+    },
+    {
+      "case_id": "ACC-XT-04",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §9; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["cross_table_integrity_and_recovery"],
+      "scenario": "Trigger trg_boundary_versions_guard enforces immutable geometry/provenance and monotonic DRAFT -> VALIDATED -> APPROVED lifecycle.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S4",
+      "test_nodes": [
+        "tests/test_m3_eligibility_and_guards.py::test_m3_db_trigger_boundary_immutability_and_monotonic_lifecycle"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S4"]
+    },
+    {
+      "case_id": "ACC-XT-05",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §9-§11; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["cross_table_integrity_and_recovery"],
+      "scenario": "Trigger trg_import_runs_guard enforces APPROVED boundary for PUBLISHED runs and prevents in-place evidence mutation or key stripping on PUBLISHED -> SUPERSEDED.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S4",
+      "test_nodes": [
+        "tests/test_m3_eligibility_and_guards.py::test_m3_db_triggers_import_runs_places_and_duplicate_candidates_immutability",
+        "tests/test_m37_remediation.py::test_blocker2_hardened_import_runs_published_evidence_immutability"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S4"]
+    },
+    {
+      "case_id": "ACC-XT-06",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §8 & §12; docs/IMPLEMENTATION_PLAN.md M3.7",
+      "scope_memberships": ["cross_table_integrity_and_recovery"],
+      "scenario": "0004 triggers block direct INSERT/UPDATE/DELETE on staging tables and import_issues once parent run is PREPARED, PUBLISHED, or SUPERSEDED.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S4",
+      "test_nodes": [
+        "tests/test_m37_remediation.py::test_blocker2_direct_staging_and_issues_mutations_blocked_across_prepared_published_superseded"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S4"]
+    },
+    {
+      "case_id": "ACC-XT-07",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §12; docs/IMPLEMENTATION_PLAN.md M2.6 & M3.7",
+      "scope_memberships": ["cross_table_integrity_and_recovery"],
+      "scenario": "Concurrent staging writers racing with verify_and_prepare_run serialize on row/share locks and fail closed rather than slipping unverified rows into PREPARED runs.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S5",
+      "test_nodes": [
+        "tests/test_m2_remediation.py::test_concurrent_staging_writer_blocked_during_verify_and_prepare_run",
+        "tests/test_m37_remediation.py::test_blocker2_concurrent_direct_staging_write_racing_with_prepared_transition"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S5"]
+    },
+    {
+      "case_id": "ACC-XT-08",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §11-§12; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["cross_table_integrity_and_recovery"],
+      "scenario": "Tampered staging digests or concurrent staging mutations during open publication are caught under lock and roll back publication without reader leakage.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S5",
+      "test_nodes": [
+        "tests/test_m37_remediation.py::test_blocker2_concurrent_staging_mutation_during_open_publication_and_in_tx_digest_guard",
+        "tests/test_m3_fault_injection_and_concurrency.py::test_m35_stale_preflight_caught_by_lock_revalidation_and_failed_publish_invisible_to_readers",
+        "tests/test_m3_eligibility_and_guards.py::test_m31_rejects_tampered_staging_digest_and_provenance_mismatch"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S5", "junit:S4"]
+    },
+    {
+      "case_id": "ACC-XT-09",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §8; docs/IMPLEMENTATION_PLAN.md M2.6",
+      "scope_memberships": ["cross_table_integrity_and_recovery"],
+      "scenario": "Source file modification, replacement, or clean truncation between checksum verification and parsing fails closed with SOURCE_INTEGRITY_ERROR.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S5",
+      "test_nodes": [
+        "tests/test_m2_remediation.py::test_blocker2_source_modified_between_checksum_and_parse_is_rejected",
+        "tests/test_m2_remediation.py::test_blocker2_source_replaced_with_other_valid_file_and_clean_truncation_rejected"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S5"]
+    },
+    {
+      "case_id": "ACC-XT-10",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §9 & §12; docs/IMPLEMENTATION_PLAN.md M2.6",
+      "scope_memberships": ["cross_table_integrity_and_recovery"],
+      "scenario": "Staging readiness fails closed on mismatched boundary_version_id, unfiltered out-of-boundary rows, empty staging, stale/extra rows, tampered counts, or unverified post-parse state.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S2",
+      "test_nodes": [
+        "tests/test_m2_remediation.py::test_blocker3_mismatched_boundary_id_and_unfiltered_outside_points_rejected",
+        "tests/test_m2_remediation.py::test_blocker3_empty_staging_stale_rows_and_unverified_post_parse_rejected",
+        "tests/test_m2_staging.py::test_import_issue_recording_and_incomplete_count_drift_rejected"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S2"]
+    },
+    {
+      "case_id": "ACC-XT-11",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §8, §9, §11; docs/IMPLEMENTATION_PLAN.md M3",
+      "scope_memberships": ["cross_table_integrity_and_recovery"],
+      "scenario": "Default AUTHORITATIVE publication mode rejects incomplete node_only runs; DRAFT and VALIDATED boundaries are blocked while APPROVED synthetic boundary passes CONTROLLED_TEST_NODE_ONLY.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S4",
+      "test_nodes": [
+        "tests/test_m3_eligibility_and_guards.py::test_m31_authoritative_mode_blocks_node_only_staging_ready_run",
+        "tests/test_m3_eligibility_and_guards.py::test_m31_controlled_test_mode_distinguishes_approved_vs_draft_or_validated_boundary"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S4"]
+    },
+    {
+      "case_id": "ACC-XT-12",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §11-§12; docs/IMPLEMENTATION_PLAN.md M3",
+      "scope_memberships": ["cross_table_integrity_and_recovery"],
+      "scenario": "Incomplete node_only runs cannot replace an active full-coverage dataset, and non-PREPARED run statuses fail publication preflight.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S4",
+      "test_nodes": [
+        "tests/test_m3_eligibility_and_guards.py::test_m31_blocks_node_only_publication_over_active_full_coverage_dataset",
+        "tests/test_m3_eligibility_and_guards.py::test_m31_rejects_non_prepared_run_statuses"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S4"]
+    },
+    {
+      "case_id": "ACC-XT-13",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §4, §9, §11; docs/IMPLEMENTATION_PLAN.md M3.7",
+      "scope_memberships": ["cross_table_integrity_and_recovery"],
+      "scenario": "AUTHORITATIVE mode rejects synthetic boundary evidence; first publication rejects orphaned active Node/Way/Relation places; CONTROLLED_TEST_NODE_ONLY fails closed on dev/non-test DBs.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S4",
+      "test_nodes": [
+        "tests/test_m3_eligibility_and_guards.py::test_m31_authoritative_boundary_evidence_and_orphaned_active_places_rejected",
+        "tests/test_m37_remediation.py::test_blocker3_first_publication_rejects_orphaned_active_way_or_relation_places",
+        "tests/test_m37_remediation.py::test_blocker3_controlled_test_mode_rejects_dev_db_non_test_db_and_spoofed_env"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S4"]
+    },
+    {
+      "case_id": "ACC-XT-14",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §11-§12; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["cross_table_integrity_and_recovery"],
+      "scenario": "Atomic publication enforces active OSM identities == prepared canonical OSM identities, updates last_seen_import_id even on unchanged places, soft-deactivates absent identities without hard delete, and preserves non-node scopes cleanly.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S4",
+      "test_nodes": [
+        "tests/test_m3_publication_e2e.py::test_m33_controlled_v1_v2_v3_reactivation_stable_ids_and_provenance",
+        "tests/test_m3_publication_e2e.py::test_m33_node_only_publication_rejects_mixed_coverage_and_reconciliation_preserves_non_nodes"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S4"]
+    },
+    {
+      "case_id": "ACC-XT-15",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §11 & §13; docs/IMPLEMENTATION_PLAN.md M3.7",
+      "scope_memberships": ["cross_table_integrity_and_recovery"],
+      "scenario": "Pre-commit verification rejects unexpected pre-existing duplicate_candidates rows across NOT_EXECUTED, VERIFIED_EMPTY, and CANDIDATES_PROVIDED states.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S4",
+      "test_nodes": [
+        "tests/test_m37_remediation.py::test_section5_unexpected_duplicate_candidate_rows_rejected_by_pre_commit_verification"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S4"]
+    },
+    {
+      "case_id": "ACC-XT-16",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §14; docs/IMPLEMENTATION_PLAN.md M3",
+      "scope_memberships": ["cross_table_integrity_and_recovery"],
+      "scenario": "First publication with zero prior active run returns None from prepare_recovery_artifact and rejects any unexpectedly supplied recovery artifact.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S4",
+      "test_nodes": [
+        "tests/test_m3_recovery_artifact.py::test_m32_first_publication_returns_none_and_does_not_fabricate_artifact",
+        "tests/test_m37_remediation.py::test_blocker1_unexpected_recovery_artifact_rejected_on_first_publication"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S4", "recovery_verification"]
+    },
+    {
+      "case_id": "ACC-XT-17",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §14; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["cross_table_integrity_and_recovery"],
+      "scenario": "Immutable recovery artifact captures complete canonical places, provenance, manifest, and checksums, rejects tampering/corruption, and prevents overwriting existing artifact directories.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S4",
+      "test_nodes": [
+        "tests/test_m3_recovery_artifact.py::test_m32_recovery_artifact_consistency_corruption_rejection_and_overwrite_protection"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S4", "recovery_verification"]
+    },
+    {
+      "case_id": "ACC-XT-18",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §14; docs/IMPLEMENTATION_PLAN.md M3.7",
+      "scope_memberships": ["cross_table_integrity_and_recovery"],
+      "scenario": "Recovery artifact reads one REPEATABLE READ snapshot and live-baseline verification rejects post-snapshot place content drift, duplicate pair/evidence drift, and boundary EWKB/provenance drift.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S4",
+      "test_nodes": [
+        "tests/test_m3_recovery_artifact.py::test_m32_repeatable_read_snapshot_consistency_and_stale_artifact_rejection",
+        "tests/test_m37_remediation.py::test_blocker1_content_only_place_mutations_after_snapshot_rejected",
+        "tests/test_m37_remediation.py::test_blocker1_duplicate_evidence_and_pair_swaps_without_count_change_rejected",
+        "tests/test_m37_remediation.py::test_blocker1_boundary_geom_ewkb_drift_provenance_mismatch_and_artifact_tampering"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S4", "recovery_verification"]
+    },
+    {
+      "case_id": "ACC-XT-19",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §14; docs/IMPLEMENTATION_PLAN.md M5",
+      "scope_memberships": ["cross_table_integrity_and_recovery"],
+      "scenario": "Controlled recovery rejects missing, tampered, unsupported format, or provenance-mismatched historical source artifacts fail-closed without mutating live data.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S4",
+      "test_nodes": [
+        "tests/test_m5_recovery_verification_and_approval.py::test_m5_ac1_rejects_missing_tampered_unsupported_and_mismatched_artifacts"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S4", "recovery_verification"]
+    },
+    {
+      "case_id": "ACC-XT-20",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §14; docs/IMPLEMENTATION_PLAN.md M5",
+      "scope_memberships": ["cross_table_integrity_and_recovery"],
+      "scenario": "Controlled recovery requires a valid, timezone-aware, non-blank, cryptographically bound manual RecoveryApproval and rejects missing/malformed/mismatched approvals fail-closed.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S4",
+      "test_nodes": [
+        "tests/test_m5_recovery_verification_and_approval.py::test_m5_ac1_rejects_missing_malformed_and_mismatched_manual_approval"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S4", "recovery_verification"]
+    },
+    {
+      "case_id": "ACC-XT-21",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §14; docs/ACCEPTANCE_POLICY.md §3; docs/IMPLEMENTATION_PLAN.md M5",
+      "scope_memberships": ["cross_table_integrity_and_recovery"],
+      "scenario": "Controlled recovery restores exact V1 canonical content, membership, active boundary, stable places.id, and last_seen_import_id via a new RECOVERY run while keeping V1 source and V2 protection artifacts distinct and preserving all history.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S4",
+      "test_nodes": [
+        "tests/test_m5_recovery_e2e_and_history.py::test_m5_ac2_restore_v1_while_v2_active_restores_canonical_content_boundary_and_ids"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S4", "recovery_verification"]
+    },
+    {
+      "case_id": "ACC-XT-22",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §13-§14; docs/IMPLEMENTATION_PLAN.md M5",
+      "scope_memberships": ["cross_table_integrity_and_recovery"],
+      "scenario": "Default controlled recovery records duplicate_detection_state=NOT_EXECUTED without copying V1/V2 duplicate rows or falsely reporting VERIFIED_EMPTY, while retaining historical duplicate rows on original runs.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S4",
+      "test_nodes": [
+        "tests/test_m5_faults_concurrency_and_duplicates.py::test_m5_ac6_default_recovery_records_not_executed_and_preserves_v1_v2_duplicate_history_only"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S4", "recovery_verification"]
+    },
+    {
+      "case_id": "ACC-XT-23",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §15; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["cross_table_integrity_and_recovery"],
+      "scenario": "Database-level readers using READ COMMITTED single-statement and REPEATABLE READ READ ONLY multi-query helpers observe consistent committed snapshots during atomic and rolled-back publications.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S5",
+      "test_nodes": [
+        "tests/test_m3_fault_injection_and_concurrency.py::test_m35_reader_snapshot_isolation_during_and_after_atomic_publication",
+        "tests/test_m37_remediation.py::test_section5_reader_isolation_during_failed_rolled_back_publication"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S5"]
+    },
+    {
+      "case_id": "ACC-XT-24",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §15; docs/ACCEPTANCE_POLICY.md §3; docs/IMPLEMENTATION_PLAN.md M4",
+      "scope_memberships": ["cross_table_integrity_and_recovery"],
+      "scenario": "Concurrent FastAPI readers never observe uncommitted V2 publication writes, see atomic switch upon COMMIT, and never observe rolled-back V3 writes.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S5",
+      "test_nodes": [
+        "tests/test_m4_api_consistency.py::test_m44_api_publication_concurrency_uncommitted_commit_and_rollback"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S5"]
+    },
+    {
+      "case_id": "ACC-XT-25",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §15; docs/ACCEPTANCE_POLICY.md §3; docs/IMPLEMENTATION_PLAN.md M4",
+      "scope_memberships": ["cross_table_integrity_and_recovery"],
+      "scenario": "FastAPI multi-query endpoints (/api/v1/places and /api/v1/places/nearby) execute COUNT(*) and SELECT inside one REPEATABLE READ READ ONLY transaction and never mix V1 total with V2 items.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S5",
+      "test_nodes": [
+        "tests/test_m4_api_consistency.py::test_m44_multi_statement_response_repeatable_read_snapshot_across_live_commit"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S5"]
+    },
+    {
+      "case_id": "ACC-XT-26",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §3 & §15; docs/IMPLEMENTATION_PLAN.md M4",
+      "scope_memberships": ["cross_table_integrity_and_recovery"],
+      "scenario": "FastAPI enforces PostgreSQL READ ONLY isolation levels, rejects non-GET write verbs (405), hides unpublished PREPARED staging runs, and hides orphan active places when no active_slot=1 exists.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S2",
+      "test_nodes": [
+        "tests/test_m4_api_consistency.py::test_m44_postgresql_isolation_levels_readonly_transactions_and_write_methods_blocked",
+        "tests/test_m4_places_detail.py::test_m47_ac2_staged_unpublished_v2_remains_invisible_while_v1_active",
+        "tests/test_m4_api_consistency.py::test_m47_ac3_no_active_publication_returns_empty_and_hides_orphan_active_place"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S2"]
+    },
+    {
+      "case_id": "ACC-XT-27",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §14-§15; docs/IMPLEMENTATION_PLAN.md M5",
+      "scope_memberships": ["cross_table_integrity_and_recovery"],
+      "scenario": "Concurrent FastAPI readers do not observe uncommitted controlled-recovery writes and never mix V2 total with recovered V1 items across COMMIT.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S5",
+      "test_nodes": [
+        "tests/test_m5_faults_concurrency_and_duplicates.py::test_m5_ac5_uncommitted_recovery_is_invisible_to_concurrent_api_readers",
+        "tests/test_m5_faults_concurrency_and_duplicates.py::test_m5_ac5_multi_query_response_never_mixes_v2_total_with_recovered_v1_items"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S5", "recovery_verification"]
+    },
+    {
+      "case_id": "ACC-XT-28",
+      "requirement_ref": "AGENTS.md §4; docs/IMPLEMENTATION_PLAN.md M1 & M4",
+      "scope_memberships": ["cross_table_integrity_and_recovery"],
+      "scenario": "Fail-closed database guards isolate TEST_DATABASE_URL from DATABASE_URL, reject unsafe/non-test/remote URLs and loopback aliases, and prevent API fallback to TEST_DATABASE_URL.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S1",
+      "test_nodes": [
+        "tests/test_db_smoke.py::test_unsafe_test_database_urls_rejected",
+        "tests/test_db_smoke.py::test_dev_server_collision_and_loopback_aliases_rejected",
+        "tests/test_db_smoke.py::test_verify_connected_test_database_rejects_expected_mismatch_and_dev_server",
+        "tests/test_db_smoke.py::test_missing_test_database_url_fails_closed",
+        "tests/test_m4_health.py::test_m41_load_api_settings_rejects_missing_database_url_without_test_fallback",
+        "tests/test_m4_api_consistency.py::test_m44_test_database_identity_guards_remain_fail_closed"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S1"]
+    },
+    {
+      "case_id": "ACC-MG-01",
+      "requirement_ref": "docs/ACCEPTANCE_POLICY.md §3 & §5 (G1)",
+      "scope_memberships": ["migration_and_schema"],
+      "scenario": "G1: Clean Alembic upgrade to head (0004_m3_staging_immutability) succeeds on a fresh PostgreSQL/PostGIS database and records exact applied revision.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S3",
+      "test_nodes": [
+        "tests/test_migrations.py::test_g1_g2_clean_upgrade_idempotency_and_catalog_contract"
+      ],
+      "gates": ["G1"],
+      "required_evidence": ["junit:S3", "migration_gate:G1"]
+    },
+    {
+      "case_id": "ACC-MG-02",
+      "requirement_ref": "docs/ACCEPTANCE_POLICY.md §3 & §5 (G1)",
+      "scope_memberships": ["migration_and_schema"],
+      "scenario": "G1: Re-running Alembic upgrade head when already at head is a safe idempotent no-op.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S3",
+      "test_nodes": [
+        "tests/test_migrations.py::test_g1_g2_clean_upgrade_idempotency_and_catalog_contract"
+      ],
+      "gates": ["G1"],
+      "required_evidence": ["junit:S3", "migration_gate:G1"]
+    },
+    {
+      "case_id": "ACC-MG-03",
+      "requirement_ref": "docs/IMPLEMENTATION_PLAN.md M1.5; README.md Setup",
+      "scope_memberships": ["migration_and_schema"],
+      "scenario": "G1/Core packaging: Alembic upgrade, current, and check succeed in a core-only installation without optional python-dotenv.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S3",
+      "test_nodes": [
+        "tests/test_migrations.py::test_alembic_workflow_succeeds_without_python_dotenv"
+      ],
+      "gates": ["G1"],
+      "required_evidence": ["junit:S3", "migration_gate:G1"]
+    },
+    {
+      "case_id": "ACC-MG-04",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §6; docs/ACCEPTANCE_POLICY.md §5 (G2)",
+      "scope_memberships": ["migration_and_schema"],
+      "scenario": "G2: PostgreSQL catalog contains exactly the five approved canonical business tables plus the three M2 technical staging tables, with zero unauthorized extra tables.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S3",
+      "test_nodes": [
+        "tests/test_migrations.py::test_g1_g2_clean_upgrade_idempotency_and_catalog_contract"
+      ],
+      "gates": ["G2"],
+      "required_evidence": ["junit:S3", "migration_gate:G2", "schema_verification"]
+    },
+    {
+      "case_id": "ACC-MG-05",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §7 & §9; docs/ACCEPTANCE_POLICY.md §5 (G2)",
+      "scope_memberships": ["migration_and_schema"],
+      "scenario": "G2: PostgreSQL catalog confirms exact spatial column types geometry(MultiPolygon,4326) on boundary_versions.geom and geography(Point,4326) on places.location and staging_place_candidates.location.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S3",
+      "test_nodes": [
+        "tests/test_migrations.py::test_g1_g2_clean_upgrade_idempotency_and_catalog_contract"
+      ],
+      "gates": ["G2"],
+      "required_evidence": ["junit:S3", "migration_gate:G2", "schema_verification"]
+    },
+    {
+      "case_id": "ACC-MG-06",
+      "requirement_ref": "docs/ACCEPTANCE_POLICY.md §3 & §5 (G2)",
+      "scope_memberships": ["migration_and_schema"],
+      "scenario": "G2: Every required PK, UNIQUE, CHECK, and ON DELETE RESTRICT FK constraint is present in pg_constraint with convalidated=true.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S3",
+      "test_nodes": [
+        "tests/test_migrations.py::test_g1_g2_clean_upgrade_idempotency_and_catalog_contract"
+      ],
+      "gates": ["G2"],
+      "required_evidence": ["junit:S3", "migration_gate:G2", "schema_verification"]
+    },
+    {
+      "case_id": "ACC-MG-07",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §9-§13; docs/IMPLEMENTATION_PLAN.md M3; docs/ACCEPTANCE_POLICY.md §5 (G2)",
+      "scope_memberships": ["migration_and_schema"],
+      "scenario": "G2: All 8 approved M3/M3.7 guard triggers are installed in pg_trigger across canonical and technical staging tables.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S3",
+      "test_nodes": [
+        "tests/test_migrations.py::test_g1_g2_clean_upgrade_idempotency_and_catalog_contract"
+      ],
+      "gates": ["G2"],
+      "required_evidence": ["junit:S3", "migration_gate:G2", "schema_verification"]
+    },
+    {
+      "case_id": "ACC-MG-08",
+      "requirement_ref": "docs/ACCEPTANCE_POLICY.md §5 (G3)",
+      "scope_memberships": ["migration_and_schema"],
+      "scenario": "G3: Cleanly upgraded database produces zero Alembic/SQLAlchemy metadata drift, and out-of-band DDL column additions are detected as drift.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S3",
+      "test_nodes": [
+        "tests/test_migrations.py::test_g3_schema_drift_detection"
+      ],
+      "gates": ["G3"],
+      "required_evidence": ["junit:S3", "migration_gate:G3"]
+    },
+    {
+      "case_id": "ACC-MG-09",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §7 & §9; docs/ACCEPTANCE_POLICY.md §5 (G3)",
+      "scope_memberships": ["migration_and_schema"],
+      "scenario": "G3: Custom PostGIS SQLAlchemy reflection distinguishes SRID 0, 3857, and 4326 and detects spatial SRID drift.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S3",
+      "test_nodes": [
+        "tests/test_migrations.py::test_postgis_reflection_distinguishes_srid_0_from_4326",
+        "tests/test_migrations.py::test_incorrect_spatial_srid_detected_as_schema_drift"
+      ],
+      "gates": ["G3"],
+      "required_evidence": ["junit:S3", "migration_gate:G3"]
+    },
+    {
+      "case_id": "ACC-MG-10",
+      "requirement_ref": "docs/IMPLEMENTATION_PLAN.md M1.5; docs/ACCEPTANCE_POLICY.md §5 (G3)",
+      "scope_memberships": ["migration_and_schema"],
+      "scenario": "G3: PostGIS/tiger extension-managed tables are excluded without hiding public user tables with colliding names, and autogenerate renders executable PostGIS type imports.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S3",
+      "test_nodes": [
+        "tests/test_migrations.py::test_extension_table_name_collision_does_not_exclude_user_tables",
+        "tests/test_migrations.py::test_alembic_autogenerate_renders_custom_postgis_types_with_imports"
+      ],
+      "gates": ["G3"],
+      "required_evidence": ["junit:S3", "migration_gate:G3"]
+    },
+    {
+      "case_id": "ACC-MG-11",
+      "requirement_ref": "docs/ACCEPTANCE_POLICY.md §3 & §5 (G4)",
+      "scope_memberships": ["migration_and_schema"],
+      "scenario": "G4: Upgrading from earlier revision 0001_m1_initial_schema to head with representative historical canonical rows preserves all valid data intact and activates M3/M3.7 guard triggers.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S3",
+      "test_nodes": [
+        "tests/test_migrations.py::test_g4_upgrade_from_0001_preserves_historical_data_and_enforces_triggers"
+      ],
+      "gates": ["G4"],
+      "required_evidence": ["junit:S3", "migration_gate:G4"]
+    },
+    {
+      "case_id": "ACC-MG-12",
+      "requirement_ref": "docs/ACCEPTANCE_POLICY.md §3 & §5 (G4); AGENTS.md §4",
+      "scope_memberships": ["migration_and_schema"],
+      "scenario": "G4: Introducing a stricter constraint incompatible with existing rows fails cleanly with SQLSTATE 23514 without silently repairing or destroying legacy data.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S3",
+      "test_nodes": [
+        "tests/test_migrations.py::test_g4_existing_invalid_data_blocks_stricter_constraint_without_silent_repair"
+      ],
+      "gates": ["G4"],
+      "required_evidence": ["junit:S3", "migration_gate:G4"]
+    },
+    {
+      "case_id": "ACC-MG-13",
+      "requirement_ref": "docs/ACCEPTANCE_POLICY.md §3 & §5 (G5)",
+      "scope_memberships": ["migration_and_schema"],
+      "scenario": "G5: Failed Alembic migration and failed transactional DDL report failure accurately, roll back atomically, and leave alembic_version and database schema uncorrupted.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S3",
+      "test_nodes": [
+        "tests/test_migrations.py::test_g5_failed_ddl_transaction_rolls_back_atomically",
+        "tests/test_migrations.py::test_g5_alembic_upgrade_failure_reports_error_and_leaves_revision_unchanged"
+      ],
+      "gates": ["G5"],
+      "required_evidence": ["junit:S3", "migration_gate:G5"]
+    },
+    {
+      "case_id": "ACC-MG-14",
+      "requirement_ref": "docs/ACCEPTANCE_POLICY.md §3 & §5 (G6)",
+      "scope_memberships": ["migration_and_schema"],
+      "scenario": "G6: Empty-DB downgrade (head -> base -> head) and populated non-destructive trigger downgrade/re-upgrade (0004 -> 0002 -> head) succeed cleanly with zero schema drift.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S3",
+      "test_nodes": [
+        "tests/test_migrations.py::test_g6_conditional_downgrade_empty_reupgrade_and_populated_guard"
+      ],
+      "gates": ["G6"],
+      "required_evidence": ["junit:S3", "migration_gate:G6"]
+    },
+    {
+      "case_id": "ACC-MG-15",
+      "requirement_ref": "docs/ACCEPTANCE_POLICY.md §5 & §6 (G6); AGENTS.md §4",
+      "scope_memberships": ["migration_and_schema"],
+      "scenario": "G6: Populated destructive downgrades (0002 -> 0001 with staging rows; 0001 -> base with canonical rows) fail closed preserving revision and data; destructive downgrade on populated data is non-reversible under approved roll-forward/controlled-recovery rule G6_POPULATED_DESTRUCTIVE_DOWNGRADE.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "applicability_rule": "G6_POPULATED_DESTRUCTIVE_DOWNGRADE",
+      "suite": "S3",
+      "test_nodes": [
+        "tests/test_migrations.py::test_g6_conditional_downgrade_empty_reupgrade_and_populated_guard"
+      ],
+      "gates": ["G6"],
+      "required_evidence": ["junit:S3", "migration_gate:G6"]
+    },
+    {
+      "case_id": "ACC-CV-01",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §5 & §7; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["column_validation_and_jsonb"],
+      "scenario": "Approved five-category domain (cafe, restaurant, atm, pharmacy, supermarket) enforced deterministically in Python classification, PostgreSQL CHECK constraints, and API filters; conflicting multi-category tags quarantined.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S1",
+      "test_nodes": [
+        "tests/test_m2_classification.py::test_approved_five_categories_positive",
+        "tests/test_m2_classification.py::test_unsupported_and_missing_category_tags_filtered_without_issue",
+        "tests/test_m2_classification.py::test_conflicting_or_multivalue_category_tags_quarantined_deterministically",
+        "tests/test_schema_column_validation.py::test_valid_place_categories_accepted",
+        "tests/test_schema_column_validation.py::test_invalid_place_categories_rejected"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S1", "junit:S2"]
+    },
+    {
+      "case_id": "ACC-CV-02",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §7; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["column_validation_and_jsonb"],
+      "scenario": "Name nullability enforced consistently: ATM allows NULL name + NULL name_search without fabricating placeholders; non-ATM requires non-blank name; blank/malformed names rejected at Python and SQL layers.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S2",
+      "test_nodes": [
+        "tests/test_m2_validation.py::test_named_and_unnamed_atm_behavior",
+        "tests/test_m2_validation.py::test_non_atm_categories_require_name",
+        "tests/test_m2_validation.py::test_blank_and_malformed_names_rejected_for_all_categories",
+        "tests/test_schema_column_validation.py::test_non_atm_requires_name",
+        "tests/test_schema_column_validation.py::test_atm_nullable_and_named_behavior",
+        "tests/test_schema_column_validation.py::test_blank_name_rejected",
+        "tests/test_schema_column_validation.py::test_name_search_nullability_consistency"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S1", "junit:S2"]
+    },
+    {
+      "case_id": "ACC-CV-03",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §7; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["column_validation_and_jsonb"],
+      "scenario": "Vietnamese name_search normalization applies Unicode casefolding, combining-mark removal, đ/Đ -> d, whitespace normalization, invisible Cf removal, and NFC/NFD parity.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S1",
+      "test_nodes": [
+        "tests/test_m2_validation.py::test_vietnamese_name_search_normalization",
+        "tests/test_m2_validation.py::test_name_search_nfc_and_nfd_produce_identical_output"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S1"]
+    },
+    {
+      "case_id": "ACC-CV-04",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §7; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["column_validation_and_jsonb"],
+      "scenario": "Address is optional and never fabricated; blank addresses normalize to NULL in Python and are rejected directly by PostgreSQL CHECK.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S2",
+      "test_nodes": [
+        "tests/test_m2_validation.py::test_nullable_address_normalization_and_tag_extraction",
+        "tests/test_schema_column_validation.py::test_address_nullable_but_not_blank"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S1", "junit:S2"]
+    },
+    {
+      "case_id": "ACC-CV-05",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §7-§9; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["column_validation_and_jsonb"],
+      "scenario": "raw_tags and all JSONB metadata columns (import_runs, import_issues, duplicate_candidates, boundary_versions) enforce JSON object type and preserve original decoded OSM tags without mixing provenance.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S2",
+      "test_nodes": [
+        "tests/test_m2_validation.py::test_raw_tags_preservation_and_provenance_separation",
+        "tests/test_m2_validation.py::test_missing_or_malformed_raw_tags_rejected",
+        "tests/test_schema_column_validation.py::test_places_raw_tags_rejects_non_object_jsonb",
+        "tests/test_schema_column_validation.py::test_secondary_tables_reject_non_object_jsonb",
+        "tests/test_schema_column_validation.py::test_boundary_version_validation_evidence_must_be_json_object"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S1", "junit:S2"]
+    },
+    {
+      "case_id": "ACC-CV-06",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §7; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["column_validation_and_jsonb"],
+      "scenario": "OSM identity domain (node/way/relation), positive osm_id, required NOT NULL columns, paired import_issues OSM identity, and OSM version/changeset/timestamp metadata are enforced.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S2",
+      "test_nodes": [
+        "tests/test_m2_validation.py::test_invalid_osm_identities_rejected",
+        "tests/test_m2_validation.py::test_invalid_osm_metadata_rejected",
+        "tests/test_schema_column_validation.py::test_invalid_osm_type_rejected",
+        "tests/test_schema_column_validation.py::test_non_positive_osm_id_rejected",
+        "tests/test_schema_column_validation.py::test_places_required_columns_reject_null",
+        "tests/test_schema_column_validation.py::test_import_issues_osm_identity_pair_and_fk"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S1", "junit:S2"]
+    },
+    {
+      "case_id": "ACC-CV-07",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §9; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["column_validation_and_jsonb"],
+      "scenario": "boundary_versions row-level CHECK constraints enforce DRAFT -> VALIDATED -> APPROVED statuses, per-state metadata completeness, SHA-256 checksum format, and valid non-empty SRID 4326 MultiPolygon geometry.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S2",
+      "test_nodes": [
+        "tests/test_schema_column_validation.py::test_boundary_version_lifecycle_valid_states_and_default_draft",
+        "tests/test_schema_column_validation.py::test_boundary_version_rejects_unapproved_lifecycle_statuses",
+        "tests/test_schema_column_validation.py::test_boundary_version_lifecycle_metadata_consistency_enforced",
+        "tests/test_schema_column_validation.py::test_boundary_version_geometry_and_checksum_constraints"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S2"]
+    },
+    {
+      "case_id": "ACC-CV-08",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §8; docs/IMPLEMENTATION_PLAN.md M2",
+      "scope_memberships": ["column_validation_and_jsonb"],
+      "scenario": "Streaming Pyosmium Node-only extractor deterministically processes XML and binary .osm.pbf fixtures, quarantines invalid records, computes reproducible file checksums, and enforces PostgreSQL staging CHECK constraints.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S1",
+      "test_nodes": [
+        "tests/test_m2_osm_extractor.py::test_stream_extract_xml_fixture_deterministic_and_complete",
+        "tests/test_m2_osm_extractor.py::test_stream_extract_real_pbf_including_missing_location_and_sentinel_metadata",
+        "tests/test_m2_osm_extractor.py::test_file_checksum_deterministic_and_file_errors_handled_safely",
+        "tests/test_m2_remediation.py::test_direct_postgres_check_constraints_on_staging_tables"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S1", "junit:S2", "fixture_checksums"]
+    },
+    {
+      "case_id": "ACC-CV-09",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §3; docs/IMPLEMENTATION_PLAN.md M4; README.md API Contract",
+      "scope_memberships": ["column_validation_and_jsonb"],
+      "scenario": "FastAPI input validation rejects malformed coordinates, radius, pagination, IDs, oversized/NUL queries, and unsupported categories with HTTP 422 before hitting the database.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S1",
+      "test_nodes": [
+        "tests/test_m4_api_consistency.py::test_m47_ac1_validation_rejects_invalid_requests_before_database_access",
+        "tests/test_m4_places_detail.py::test_m42_place_detail_rejects_invalid_ids_with_422",
+        "tests/test_m4_places_search.py::test_m42_search_rejects_invalid_parameters_with_422",
+        "tests/test_m4_nearby.py::test_m43_nearby_rejects_invalid_coordinates_radius_and_filters"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S1", "junit:S2"]
+    },
+    {
+      "case_id": "ACC-CV-10",
+      "requirement_ref": "docs/ACCEPTANCE_POLICY.md §6-§8",
+      "scope_memberships": ["column_validation_and_jsonb"],
+      "scenario": "M6 Acceptance Registry validator and evidence evaluator fail closed on missing evidence, failed/skipped/xfailed blocking tests, malformed artifacts, stale commit SHAs, and secret leaks, while preserving rerun failure history.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S1",
+      "test_nodes": [
+        "tests/test_m6_acceptance.py::test_registry_accounting_and_suite_completeness",
+        "tests/test_m6_acceptance.py::test_evaluator_rejects_missing_failed_skipped_xfailed_and_stale_evidence",
+        "tests/test_m6_acceptance.py::test_evaluator_rejects_mixed_working_trees_same_commit_sha",
+        "tests/test_m6_acceptance.py::test_evaluator_rejects_unknown_working_tree_fingerprint",
+        "tests/test_m6_acceptance.py::test_evaluator_rejects_missing_or_invalid_suite_exit_code",
+        "tests/test_m6_acceptance.py::test_evaluator_rejects_schema_report_missing_checksum_or_fail_status",
+        "tests/test_m6_acceptance.py::test_evaluator_preserves_rerun_failure_history_and_redacts_secrets"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S1"]
+    },
+    {
+      "case_id": "ACC-SP-01",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §7; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["spatial_correctness_and_api"],
+      "scenario": "WGS84 coordinate finiteness and bounds (lon in [-180,180], lat in [-90,90]) and ST_MakePoint(longitude, latitude) ordering are enforced in Python and PostgreSQL.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S2",
+      "test_nodes": [
+        "tests/test_m2_validation.py::test_valid_wgs84_coordinates_preserve_lon_lat_order",
+        "tests/test_m2_validation.py::test_invalid_coordinates_rejected",
+        "tests/test_schema_column_validation.py::test_valid_wgs84_points_accepted",
+        "tests/test_schema_column_validation.py::test_python_layer_rejects_invalid_wgs84_coordinates",
+        "tests/test_schema_column_validation.py::test_postgres_layer_rejects_empty_and_nan_points",
+        "tests/test_m2_pipeline_integration.py::test_e2e_single_valid_supported_node_staged"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S1", "junit:S2"]
+    },
+    {
+      "case_id": "ACC-SP-02",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §2 & §4; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["spatial_correctness_and_api"],
+      "scenario": "PostGIS extension is available and executes point construction, geography distance, and ST_Covers on the dedicated test database.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S2",
+      "test_nodes": [
+        "tests/test_db_smoke.py::test_select_one",
+        "tests/test_db_smoke.py::test_database_identity",
+        "tests/test_db_smoke.py::test_postgis_extension_available",
+        "tests/test_db_smoke.py::test_postgis_spatial_function_execution"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S2"]
+    },
+    {
+      "case_id": "ACC-SP-03",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §4 & §9; docs/ACCEPTANCE_POLICY.md §3",
+      "scope_memberships": ["spatial_correctness_and_api"],
+      "scenario": "ST_Covers on synthetic MultiPolygon with hole and island accurately classifies interior, outer boundary edge, outer vertex, hole interior, hole boundary edge, island interior, island boundary edge, and outside points.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S2",
+      "test_nodes": [
+        "tests/test_spatial_integrity.py::test_synthetic_multipolygon_spatial_membership"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S2"]
+    },
+    {
+      "case_id": "ACC-SP-04",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §4 & §9; docs/IMPLEMENTATION_PLAN.md M2 & M3",
+      "scope_memberships": ["spatial_correctness_and_api"],
+      "scenario": "End-to-end staging ingestion and atomic publication enforce ST_Covers membership across complex MultiPolygon boundaries (interior, edges, vertices, holes, islands, outside).",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S4",
+      "test_nodes": [
+        "tests/test_m2_remediation.py::test_blocker3_complex_multipolygon_st_covers_all_spatial_cases",
+        "tests/test_m3_publication_e2e.py::test_m33_complex_multipolygon_spatial_publication_st_covers"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S2", "junit:S4"]
+    },
+    {
+      "case_id": "ACC-SP-05",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §3; docs/IMPLEMENTATION_PLAN.md M4",
+      "scope_memberships": ["spatial_correctness_and_api"],
+      "scenario": "GET /health verifies PostgreSQL readiness without mutating DB state and registers OpenAPI schema.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S2",
+      "test_nodes": [
+        "tests/test_m4_health.py::test_m41_health_endpoint_ok_and_openapi_registration"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S2"]
+    },
+    {
+      "case_id": "ACC-SP-06",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §3 & §7; docs/IMPLEMENTATION_PLAN.md M4",
+      "scope_memberships": ["spatial_correctness_and_api"],
+      "scenario": "GET /api/v1/places/{id} returns active canonical place details (including unnamed ATM nulls), excludes internal columns, and returns 404 for inactive or staging-only rows.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S2",
+      "test_nodes": [
+        "tests/test_m4_places_detail.py::test_m42_place_detail_active_unnamed_atm_inactive_staging_only_and_no_leak"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S2"]
+    },
+    {
+      "case_id": "ACC-SP-07",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §3, §5, §7; docs/IMPLEMENTATION_PLAN.md M4",
+      "scope_memberships": ["spatial_correctness_and_api"],
+      "scenario": "GET /api/v1/places performs Vietnamese-normalized search, literal LIKE wildcard/backslash escaping, 5-category filtering, and deterministic pagination on real PostgreSQL.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S2",
+      "test_nodes": [
+        "tests/test_m4_places_search.py::test_m42_escape_like_literal_unit",
+        "tests/test_m4_places_search.py::test_m42_search_vietnamese_normalization_wildcards_categories_and_pagination",
+        "tests/test_m4_places_search.py::test_m47_ac5_literal_backslash_search_via_parameterized_like_escape"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S1", "junit:S2"]
+    },
+    {
+      "case_id": "ACC-SP-08",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §3 & §7; docs/IMPLEMENTATION_PLAN.md M4",
+      "scope_memberships": ["spatial_correctness_and_api"],
+      "scenario": "GET /api/v1/places/nearby computes PostGIS WGS84 spheroidal ST_DWithin/ST_Distance in meters, distinguishes geodesic meters from planar degrees, enforces exact radius boundary equality, and sorts closest-first with deterministic id tie-break.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S2",
+      "test_nodes": [
+        "tests/test_m4_nearby.py::test_m43_nearby_postgis_distance_boundary_ties_filtering_pagination_and_v1_v2",
+        "tests/test_m4_nearby.py::test_m43_nearby_distinguishes_geodesic_meters_from_planar_degrees",
+        "tests/test_m4_nearby.py::test_m47_ac4_exact_postgis_spheroidal_radius_boundary_equality"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S2"]
+    },
+    {
+      "case_id": "ACC-SP-09",
+      "requirement_ref": "docs/IMPLEMENTATION_PLAN.md M2; docs/ARCHITECTURE_BASELINE.md §7",
+      "scope_memberships": ["spatial_correctness_and_api"],
+      "scenario": "Staging persists validated candidates with exact PostGIS geography(Point,4326) representation and passes full readiness verification.",
+      "blocking": true,
+      "expected_result": "PASS",
+      "suite": "S2",
+      "test_nodes": [
+        "tests/test_m2_staging.py::test_staging_insert_retrieval_spatial_representation_and_readiness"
+      ],
+      "gates": [],
+      "required_evidence": ["junit:S2"]
+    },
+    {
+      "case_id": "ACC-DEF-01",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §4; docs/ACCEPTANCE_POLICY.md §2; docs/IMPLEMENTATION_PLAN.md M2-M4",
+      "scope_memberships": ["authoritative_geographic_fixtures_and_deferred"],
+      "scenario": "Independently verified post-2025 Ho Chi Minh City administrative boundary (including former Binh Duong, former Ba Ria-Vung Tau, and Con Dao) and independently verified geographic reference points.",
+      "blocking": false,
+      "blocking_for_authoritative_publication": true,
+      "expected_result": "DEFERRED_EXTERNAL_DEPENDENCY",
+      "deferral_rationale": "External authoritative post-2025 HCMC boundary polygon and independently verified geographic reference coordinates (including Con Dao) have not been supplied; synthetic fixtures are explicitly prohibited from being treated as authoritative. M3 safeguards block AUTHORITATIVE publication until verified.",
+      "suite": null,
+      "test_nodes": [],
+      "gates": [],
+      "required_evidence": []
+    },
+    {
+      "case_id": "ACC-DEF-02",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §8; docs/IMPLEMENTATION_PLAN.md M2-M4",
+      "scope_memberships": ["authoritative_geographic_fixtures_and_deferred"],
+      "scenario": "Full OSM Way and Relation geometry extraction (beyond M2 Node-only streaming extraction).",
+      "blocking": false,
+      "blocking_for_authoritative_publication": true,
+      "expected_result": "DEFERRED_OUT_OF_SCOPE",
+      "deferral_rationale": "Ways and Relations are explicitly deferred to a later incremental milestone; M3 eligibility guards fail closed and block AUTHORITATIVE publication for node_only runs.",
+      "suite": null,
+      "test_nodes": [],
+      "gates": [],
+      "required_evidence": []
+    },
+    {
+      "case_id": "ACC-DEF-03",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §13; docs/IMPLEMENTATION_PLAN.md M5; README.md",
+      "scope_memberships": ["authoritative_geographic_fixtures_and_deferred"],
+      "scenario": "Automated heuristic duplicate-candidate matching thresholds (distance, name similarity, and scoring rules).",
+      "blocking": false,
+      "blocking_for_authoritative_publication": false,
+      "expected_result": "DEFERRED_PENDING_RULE_APPROVAL",
+      "deferral_rationale": "Approved M5 Option 2 + Option A scope defers automated heuristic matching until formal distance/name-matching/scoring rules are approved; canonical pair ordering, uniqueness, immutability, historical retention, NOT_EXECUTED default, and no auto-merge are verified.",
+      "suite": null,
+      "test_nodes": [],
+      "gates": [],
+      "required_evidence": []
+    },
+    {
+      "case_id": "ACC-DEF-04",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §17; AGENTS.md §3",
+      "scope_memberships": ["authoritative_geographic_fixtures_and_deferred"],
+      "scenario": "Dedicated search and spatial indexing optimization strategy (GIST, GIN, trigram, partial indexes).",
+      "blocking": false,
+      "blocking_for_authoritative_publication": false,
+      "expected_result": "OUT_OF_SCOPE",
+      "deferral_rationale": "Explicitly out of scope until an indexing optimization strategy is separately reviewed and approved.",
+      "suite": null,
+      "test_nodes": [],
+      "gates": [],
+      "required_evidence": []
+    },
+    {
+      "case_id": "ACC-DEF-05",
+      "requirement_ref": "docs/ARCHITECTURE_BASELINE.md §17",
+      "scope_memberships": ["authoritative_geographic_fixtures_and_deferred"],
+      "scenario": "Production deployment, multi-city publication, scaling, and production chaos infrastructure.",
+      "blocking": false,
+      "blocking_for_authoritative_publication": false,
+      "expected_result": "OUT_OF_SCOPE",
+      "deferral_rationale": "Explicitly out of scope for the current MVP backend and database integrity milestone.",
+      "suite": null,
+      "test_nodes": [],
+      "gates": [],
+      "required_evidence": []
+    }
+  ]
+}

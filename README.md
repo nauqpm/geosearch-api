@@ -2,7 +2,7 @@
 
 A location-based place discovery service powered by Python, FastAPI, PostgreSQL/PostGIS, and OpenStreetMap data.
 
-> Status: M1 — Database Foundation, M2 — Data Validation & OSM Ingestion (Node-only streaming extraction), M3 — Transactional Publication, M4 — Read-Only Search API (`GET /health`, `GET /api/v1/places`, `GET /api/v1/places/nearby`, `GET /api/v1/places/{id}`), and M5 — Controlled Recovery & Reliability implemented and verified against PostgreSQL 16 / PostGIS 3.4 using synthetic fixtures (awaiting M5 review/sign-off). Automated heuristic duplicate-matching thresholds, independently verified post-2025 Ho Chi Minh City boundary fixtures, Way/Relation geometry extraction, M6 CI evidence aggregation, and dedicated indexing optimization remain pending.
+> Status: M1–M5 (Database Foundation, OSM Node-only Ingestion, Transactional Publication, Read-Only Search API, and Controlled Recovery & Reliability) and M6 (Acceptance Registry, S1–S5 suites, G1–G6 migration gates, GitHub Actions CI workflow, and evidence aggregation) are implemented and locally verified against PostgreSQL 16 / PostGIS 3.4 using synthetic fixtures (remote GitHub Actions CI run and explicit `IMPLEMENTATION_ACCEPTED` sign-off pending). Automated heuristic duplicate-matching thresholds, independently verified post-2025 Ho Chi Minh City boundary fixtures, Way/Relation geometry extraction, and dedicated indexing optimization remain deferred.
 
 ## Overview
 
@@ -20,7 +20,7 @@ Beyond REST API development, the project enforces database integrity, determinis
 - Pytest and HTTPX TestClient
 - Docker Compose
 - OpenStreetMap data and Pyosmium
-- GitHub Actions (planned in M6)
+- GitHub Actions CI (`.github/workflows/ci-acceptance.yml`)
 
 ## API Endpoints (M4 — Implemented, Read-Only)
 
@@ -60,6 +60,7 @@ Unsupported category values are rejected with HTTP `422` (never silently mapped 
 - [Architecture Baseline](docs/ARCHITECTURE_BASELINE.md) — approved engineering decisions
 - [Implementation Plan](docs/IMPLEMENTATION_PLAN.md) — milestone roadmap and status
 - [Acceptance Policy](docs/ACCEPTANCE_POLICY.md) — verification and sign-off rules
+- [Acceptance Registry](docs/acceptance/acceptance_registry.json) — versioned requirement-to-evidence traceability (`18 + 26 + 28 + 15 = 87` policy memberships plus column/JSONB, spatial/API, and deferred items)
 
 ## Current Status
 
@@ -70,7 +71,7 @@ Unsupported category values are rejected with HTTP `422` (never silently mapped 
 - [x] Transactional publication (M3.1–M3.7: fail-closed eligibility tiers, immutable pre-publication recovery artifacts, trigger guards `0003` & `0004`, guarded atomic `pg_advisory_xact_lock` publication, stable `places.id` UPSERT, scope-aware soft deactivation, bidirectional SQL `EXCEPT` verification, fault-injection, concurrency, and reader isolation tests)
 - [x] Search API (M4.1–M4.6: FastAPI application factory, `/health`, `/api/v1/places`, `/api/v1/places/nearby`, `/api/v1/places/{id}`, Vietnamese search reuse, PostGIS WGS84 spheroid distance, adaptive `READ COMMITTED` / `REPEATABLE READ READ ONLY` snapshot consistency, leak-free error handling, and PostgreSQL/PostGIS HTTP integration & concurrency tests)
 - [x] Controlled recovery execution & duplicate evidence reliability (M5: historical source artifact verification with TOCTOU isolation, traceable `RecoveryApproval`, atomic `RECOVERY` run staging & guarded publication via `execute_controlled_recovery`, retry & unknown COMMIT outcome resolution, fault-injection, concurrent API snapshot tests, and run-scoped duplicate-evidence preservation; automated duplicate-matching thresholds remain pending approval)
-- [ ] Full CI & acceptance evidence aggregation (M6)
+- [x] Full CI & acceptance evidence aggregation (M6: Acceptance Registry `docs/acceptance/acceptance_registry.json`, S1–S5 suite selectors, executable G1–G6 migration gates, `.github/workflows/ci-acceptance.yml`, and unified local/CI policy evaluator `python -m geosearch.acceptance`)
 
 ## Local Setup, Running the API & Isolated Testing
 
@@ -118,6 +119,38 @@ GeoSearch strictly separates runtime/development and test database targets:
    ```bash
    pytest -v
    ```
+7. Run the unified M6 local acceptance verification pipeline (validates the Acceptance Registry, executes S1–S5 suites with JUnit XMLs, runs G1–G6 migration gates on isolated disposable databases, evaluates policy compliance, and writes `artifacts/acceptance/evidence_bundle.json` and `artifacts/acceptance/acceptance_report.md`):
+   ```bash
+   python -m geosearch.acceptance run-local
+   ```
+
+### Acceptance Test Suites (S1–S5) & Migration Gates (G1–G6)
+
+Every test in `tests/` is deterministically assigned to exactly one suite marker (`s1`–`s5`) via `src/geosearch/acceptance/suites.py` and `tests/conftest.py`:
+
+| Suite | Command | Database Required | Scope |
+|---|---|---|---|
+| S1 — Unit | `pytest -m s1 -v` | No | Pure Python validation, normalization, classification, DB URL guards, and M6 policy evaluation |
+| S2 — Database Integration | `pytest -m s2 -v` | Yes (`TEST_DATABASE_URL`) | Real PostgreSQL/PostGIS constraints, staging integration, spatial queries, and API query endpoints |
+| S3 — Migration | `pytest -m s3 -v` | Yes (`TEST_DATABASE_URL`) | Alembic G1–G6 lifecycle, catalog contract, drift, and PostGIS reflection checks |
+| S4 — Workflow | `pytest -m s4 -v` | Yes (`TEST_DATABASE_URL`) | Publication, controlled recovery, durable evidence, history, and duplicate-candidate workflows |
+| S5 — Race & Fault Injection | `pytest -m s5 -v` | Yes (`TEST_DATABASE_URL`) | Independent connections, deterministic checkpoints, rollback, concurrency, and snapshot isolation |
+
+Standalone verification subcommands (shared identically by local verification and `.github/workflows/ci-acceptance.yml`):
+
+```bash
+python -m geosearch.acceptance validate-registry
+python -m geosearch.acceptance run-migration-gates --output-dir artifacts/acceptance
+python -m geosearch.acceptance evaluate --output-dir artifacts/acceptance
+```
+
+Generated local acceptance artifacts are written under `artifacts/acceptance/` (ignored by Git):
+- `artifacts/acceptance/evidence_bundle.json` — machine-readable evidence bundle with revision, spec/registry/fixture checksums, S1–S5 JUnit summaries, G1–G6 results, blocking status, deferred items, and append-only attempt history
+- `artifacts/acceptance/acceptance_report.md` — concise human-readable technical acceptance report
+- `artifacts/acceptance/migration_gates.json` & `artifacts/acceptance/schema_verification.json` — live PostgreSQL/PostGIS G1–G6 and catalog contract outputs
+- `artifacts/acceptance/junit/s1_unit.xml` .. `s5_race_fault.xml` — JUnit XML results with SHA-256 and commit-bound metadata
+
+`TECHNICALLY_VERIFIED` is emitted only when all blocking requirements for the declared `SYNTHETIC_MVP_VERIFICATION` scope pass with fresh, non-stale evidence. `IMPLEMENTATION_ACCEPTED` is never auto-assigned and requires explicit project-owner or reviewer sign-off. When rerunning `.github/workflows/ci-acceptance.yml` in GitHub Actions, choose **Re-run all jobs** so all S1–S5 and G1–G6 artifacts are uploaded under the current `github.run_attempt`.
 
 ## Search API Contract Reference
 
@@ -301,7 +334,7 @@ All non-health API errors return a consistent JSON envelope without exposing SQL
   - Authoritative post-2025 Ho Chi Minh City boundary polygon (including former Binh Duong, former Ba Ria–Vung Tau, and Con Dao) and independently verified geographic reference fixtures.
   - Approved Vietnamese address formatting rules (M2 uses a minimal lossless extraction from `addr:full` / present `addr:*` tags while preserving all original tags in `raw_tags`).
   - Automated heuristic duplicate-detection matching thresholds and recovery duplicate-copying policy (awaiting formal business-rule approval; M3/M5 enforce canonical pair ordering, per-run uniqueness, immutability, historical retention, and no auto-merge).
-  - Full CI acceptance aggregation (M6) and dedicated indexing optimization.
+  - Dedicated indexing optimization strategy (explicitly out of scope until approved).
 
 ## Controlled Recovery Procedure (M5 — Operator Reference)
 

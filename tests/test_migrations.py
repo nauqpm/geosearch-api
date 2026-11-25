@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 import os
 import subprocess
 import sys
+import uuid
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 
@@ -32,6 +34,8 @@ from tests.helpers import (
     REPO_ROOT,
     assert_pg_error,
     insert_boundary_version,
+    insert_import_run,
+    insert_place,
     make_alembic_config,
 )
 
@@ -340,6 +344,113 @@ def test_g3_schema_drift_detection(
         assert any("unmigrated_drift_col" in str(op) for op in drift_ops)
 
 
+def test_g4_upgrade_from_0001_preserves_historical_data_and_enforces_triggers(
+    disposable_database: Callable[[str], AbstractContextManager[str]],
+) -> None:
+    """G4: Upgrading from 0001_m1_initial_schema -> head preserves valid historical data and installs guards."""
+    with disposable_database("g4_hist") as db_url:
+        cfg = make_alembic_config(db_url)
+        command.upgrade(cfg, "0001_m1_initial_schema")
+
+        engine = create_test_engine(db_url, pool_size=1, max_overflow=0)
+        try:
+            op_v1 = uuid.uuid4()
+            op_v2 = uuid.uuid4()
+            pub_v1 = datetime(2026, 1, 10, 0, 0, tzinfo=timezone.utc)
+            sup_v1 = datetime(2026, 1, 11, 0, 0, tzinfo=timezone.utc)
+            pub_v2 = datetime(2026, 1, 11, 0, 0, tzinfo=timezone.utc)
+
+            with engine.begin() as conn:
+                bv_approved = insert_boundary_version(
+                    conn, version_code="hist-bv-approved", approval_status="APPROVED"
+                )
+                bv_draft = insert_boundary_version(
+                    conn, version_code="hist-bv-draft", approval_status="DRAFT"
+                )
+                run_v1 = insert_import_run(
+                    conn,
+                    bv_approved,
+                    status="SUPERSEDED",
+                    publication_operation_id=op_v1,
+                    published_at=pub_v1,
+                    superseded_at=sup_v1,
+                    publication_evidence_json='{"version": "v1"}',
+                    active_slot=None,
+                )
+                run_v2 = insert_import_run(
+                    conn,
+                    bv_approved,
+                    status="PUBLISHED",
+                    publication_operation_id=op_v2,
+                    published_at=pub_v2,
+                    publication_evidence_json='{"version": "v2"}',
+                    active_slot=1,
+                )
+                p1 = insert_place(
+                    conn, run_v2, osm_type="node", osm_id=7001, name="Legacy Cafe 1", name_search="legacy cafe 1"
+                )
+                p2 = insert_place(
+                    conn, run_v2, osm_type="node", osm_id=7002, name="Legacy Cafe 2", name_search="legacy cafe 2"
+                )
+                conn.execute(
+                    text(
+                        """
+                        INSERT INTO import_issues (import_run_id, severity, stage, issue_code, message)
+                        VALUES (:run_id, 'WARNING', 'VALIDATE', 'LEGACY_WARN', 'Historical warning')
+                        """
+                    ),
+                    {"run_id": run_v1},
+                )
+                conn.execute(
+                    text(
+                        """
+                        INSERT INTO duplicate_candidates (
+                            import_run_id, place_a_id, place_b_id, detector_version, evidence
+                        )
+                        VALUES (
+                            :run_id, :a_id, :b_id, 'legacy-v0', '{"reason": "synthetic"}'::jsonb
+                        )
+                        """
+                    ),
+                    {"run_id": run_v2, "a_id": min(p1, p2), "b_id": max(p1, p2)},
+                )
+
+            # Upgrade live historical database across 0002 -> 0003 -> 0004.
+            command.upgrade(cfg, "head")
+            assert _compute_schema_diff(db_url) == []
+
+            with engine.connect() as conn:
+                assert (
+                    conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+                    == HEAD_REVISION
+                )
+                assert conn.execute(text("SELECT count(*) FROM boundary_versions")).scalar_one() == 2
+                assert conn.execute(text("SELECT count(*) FROM import_runs")).scalar_one() == 2
+                assert conn.execute(text("SELECT count(*) FROM places")).scalar_one() == 2
+                assert conn.execute(text("SELECT count(*) FROM import_issues")).scalar_one() == 1
+                assert conn.execute(text("SELECT count(*) FROM duplicate_candidates")).scalar_one() == 1
+                draft_status = conn.execute(
+                    text("SELECT approval_status FROM boundary_versions WHERE id = :id"),
+                    {"id": bv_draft},
+                ).scalar_one()
+                assert draft_status == "DRAFT"
+
+            # Verify newly installed 0003/0004 triggers actively protect historical rows.
+            with pytest.raises(IntegrityError) as exc_info:
+                with engine.begin() as conn:
+                    conn.execute(
+                        text("UPDATE import_runs SET status = 'PROCESSING', active_slot = NULL WHERE id = :id"),
+                        {"id": run_v2},
+                    )
+            assert_pg_error(
+                exc_info,
+                sqlstate="23514",
+                constraint_name="trg_import_runs_published_transition",
+            )
+        finally:
+            engine.dispose()
+
+
 def test_g4_existing_invalid_data_blocks_stricter_constraint_without_silent_repair(
     disposable_database: Callable[[str], AbstractContextManager[str]],
 ) -> None:
@@ -380,6 +491,45 @@ def test_g4_existing_invalid_data_blocks_stricter_constraint_without_silent_repa
                     {"id": bv_id},
                 ).scalar_one()
                 assert status == "DRAFT"
+        finally:
+            engine.dispose()
+
+
+def test_g5_alembic_upgrade_failure_reports_error_and_leaves_revision_unchanged(
+    disposable_database: Callable[[str], AbstractContextManager[str]],
+) -> None:
+    """G5: An actual Alembic upgrade failure rolls back the failed revision and preserves alembic_version."""
+    with disposable_database("g5_alembic_fail") as db_url:
+        cfg = make_alembic_config(db_url)
+        command.upgrade(cfg, "0001_m1_initial_schema")
+
+        engine = create_test_engine(db_url, pool_size=1, max_overflow=0)
+        try:
+            # Create a colliding table so 0002_m2_staging_tables fails mid-migration.
+            with engine.begin() as conn:
+                conn.execute(
+                    text("CREATE TABLE public.staging_run_checkpoints (id BIGINT PRIMARY KEY)")
+                )
+
+            with pytest.raises(ProgrammingError):
+                command.upgrade(cfg, "head")
+
+            with engine.connect() as conn:
+                rev = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+                assert rev == "0001_m1_initial_schema"
+                # Earlier tables created in the failed 0002 transaction must have rolled back cleanly.
+                assert (
+                    conn.execute(
+                        text("SELECT to_regclass('public.staging_place_candidates')")
+                    ).scalar_one()
+                    is None
+                )
+                assert (
+                    conn.execute(
+                        text("SELECT to_regclass('public.staging_issue_fingerprints')")
+                    ).scalar_one()
+                    is None
+                )
         finally:
             engine.dispose()
 

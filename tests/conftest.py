@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from psycopg import sql as psycopg_sql
 from sqlalchemy import Connection, Engine, text
 
+from geosearch.acceptance.suites import SUITE_BY_ID, classify_test_node
 from geosearch.db import (
     UnsafeDatabaseConfigError,
     build_disposable_test_database_name,
@@ -25,6 +26,14 @@ from tests.helpers import upgrade_test_db_to_head
 
 # Load local .env only if present without overriding explicitly exported env vars.
 load_dotenv(override=False)
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Attach canonical S1-S5 suite markers deterministically to every collected test."""
+    for item in items:
+        suite_id = classify_test_node(item.nodeid)
+        suite_def = SUITE_BY_ID[suite_id]
+        item.add_marker(getattr(pytest.mark, suite_def.marker))
 
 
 def _execute_db_ddl(connection: Connection, statement: psycopg_sql.Composed) -> None:

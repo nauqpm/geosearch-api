@@ -31,3 +31,10 @@ include = ["geosearch*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+markers = [
+    "s1: S1 Unit tests (pure Python rules, normalization, validation, classification, evaluation)",
+    "s2: S2 Database Integration tests (real PostgreSQL/PostGIS constraints, queries, spatial behavior)",
+    "s3: S3 Migration tests (Alembic G1-G6 checks on isolated databases)",
+    "s4: S4 Workflow tests (publication, controlled recovery, durable evidence, history)",
+    "s5: S5 Race & Fault Injection tests (independent connections, checkpoints, rollback, snapshots)",
+]

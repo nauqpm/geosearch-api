@@ -1,0 +1,291 @@
+name: GeoSearch CI & Acceptance Verification
+
+on:
+  pull_request:
+    branches: ["main"]
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  s1-unit:
+    name: S1 — Unit & Registry Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout reviewed revision
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install package and dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Validate Acceptance Registry and S1-S5 coverage
+        run: python -m geosearch.acceptance validate-registry
+
+      - name: Run S1 unit suite (no database required)
+        run: python -m geosearch.acceptance run-suite --suite S1 --output-dir artifacts/acceptance
+
+      - name: Upload S1 evidence (always retained)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-suite-s1-attempt-${{ github.run_attempt }}
+          path: artifacts/acceptance/
+          if-no-files-found: warn
+
+  s2-db-integration:
+    name: S2 — Database Integration (PostGIS 16-3.4)
+    runs-on: ubuntu-latest
+    services:
+      postgres_test:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: ci_ephemeral_test_pw
+          POSTGRES_DB: geosearch_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U user -d geosearch_test"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=15
+    env:
+      TEST_DATABASE_URL: postgresql+psycopg://user:ci_ephemeral_test_pw@127.0.0.1:5432/geosearch_test
+    steps:
+      - name: Checkout reviewed revision
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install package and dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run S2 database integration suite
+        run: python -m geosearch.acceptance run-suite --suite S2 --output-dir artifacts/acceptance
+
+      - name: Upload S2 evidence (always retained)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-suite-s2-attempt-${{ github.run_attempt }}
+          path: artifacts/acceptance/
+          if-no-files-found: warn
+
+  s3-migration-gates:
+    name: S3 — Migrations & G1-G6 Gates (PostGIS 16-3.4)
+    runs-on: ubuntu-latest
+    services:
+      postgres_test:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: ci_ephemeral_test_pw
+          POSTGRES_DB: geosearch_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U user -d geosearch_test"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=15
+    env:
+      TEST_DATABASE_URL: postgresql+psycopg://user:ci_ephemeral_test_pw@127.0.0.1:5432/geosearch_test
+    steps:
+      - name: Checkout reviewed revision
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install package and dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run S3 migration suite and G1-G6 gate verification
+        run: |
+          set +e
+          python -m geosearch.acceptance run-suite --suite S3 --output-dir artifacts/acceptance
+          s3_rc=$?
+          python -m geosearch.acceptance run-migration-gates --output-dir artifacts/acceptance
+          gates_rc=$?
+          set -e
+          if [ "$s3_rc" -ne 0 ] || [ "$gates_rc" -ne 0 ]; then
+            echo "S3 exit code: $s3_rc, G1-G6 exit code: $gates_rc"
+            exit 1
+          fi
+
+      - name: Upload S3 and G1-G6 evidence (always retained)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-suite-s3-attempt-${{ github.run_attempt }}
+          path: artifacts/acceptance/
+          if-no-files-found: warn
+
+  s4-workflow:
+    name: S4 — Publication & Recovery Workflows (PostGIS 16-3.4)
+    runs-on: ubuntu-latest
+    services:
+      postgres_test:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: ci_ephemeral_test_pw
+          POSTGRES_DB: geosearch_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U user -d geosearch_test"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=15
+    env:
+      TEST_DATABASE_URL: postgresql+psycopg://user:ci_ephemeral_test_pw@127.0.0.1:5432/geosearch_test
+    steps:
+      - name: Checkout reviewed revision
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install package and dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run S4 workflow suite
+        run: python -m geosearch.acceptance run-suite --suite S4 --output-dir artifacts/acceptance
+
+      - name: Upload S4 evidence (always retained)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-suite-s4-attempt-${{ github.run_attempt }}
+          path: artifacts/acceptance/
+          if-no-files-found: warn
+
+  s5-race-fault:
+    name: S5 — Race Conditions & Fault Injection (PostGIS 16-3.4)
+    runs-on: ubuntu-latest
+    services:
+      postgres_test:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: ci_ephemeral_test_pw
+          POSTGRES_DB: geosearch_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U user -d geosearch_test"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=15
+    env:
+      TEST_DATABASE_URL: postgresql+psycopg://user:ci_ephemeral_test_pw@127.0.0.1:5432/geosearch_test
+    steps:
+      - name: Checkout reviewed revision
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install package and dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run S5 race and fault-injection suite
+        run: python -m geosearch.acceptance run-suite --suite S5 --output-dir artifacts/acceptance
+
+      - name: Upload S5 evidence (always retained)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-suite-s5-attempt-${{ github.run_attempt }}
+          path: artifacts/acceptance/
+          if-no-files-found: warn
+
+  aggregate-acceptance:
+    name: Aggregate Evidence & Evaluate Acceptance Policy
+    runs-on: ubuntu-latest
+    needs:
+      - s1-unit
+      - s2-db-integration
+      - s3-migration-gates
+      - s4-workflow
+      - s5-race-fault
+    if: always()
+    steps:
+      - name: Checkout reviewed revision
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install package and dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Download suite and migration gate artifacts for current attempt
+        uses: actions/download-artifact@v4
+        with:
+          pattern: acceptance-suite-*-attempt-${{ github.run_attempt }}
+          path: artifacts/acceptance
+          merge-multiple: true
+
+      - name: Evaluate evidence bundle under Acceptance Policy
+        env:
+          CI_NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          mkdir -p artifacts/acceptance
+          printf '%s' "$CI_NEEDS_JSON" > artifacts/acceptance/ci_needs.json
+          REVIEWED_SHA="$(git rev-parse HEAD)"
+          python -m geosearch.acceptance evaluate \
+            --output-dir artifacts/acceptance \
+            --expected-sha "$REVIEWED_SHA" \
+            --ci-mode \
+            --ci-jobs-json artifacts/acceptance/ci_needs.json
+
+      - name: Publish acceptance summary to GitHub Step Summary
+        if: always()
+        run: |
+          if [ -f artifacts/acceptance/acceptance_report.md ]; then
+            cat artifacts/acceptance/acceptance_report.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload immutable aggregated evidence bundle (preserved per run attempt)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-evidence-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: artifacts/acceptance/
+          if-no-files-found: warn
